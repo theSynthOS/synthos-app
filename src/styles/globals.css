@@ -1,19 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Gluten:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700&display=swap');
 @import "tailwindcss";
 
 html,
 
-body {
-  padding: 0;
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
-    Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+/* width */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/* Track */
+::-webkit-scrollbar-track {
+  background: #29292f;
 }
 
-* {
-  box-sizing: border-box;
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: #5e5c64;
+  border-radius: 12px;
 }
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+  background: #5e5c64;
+}
+
+.backdrop {
+  -webkit-backdrop-filter: blur(75px); /* Add this line first, it fixes blur for Safari*/
+  backdrop-filter: blur(75px);
+}
+
+.backdropFilter {
+  -webkit-backdrop-filter: blur(20px); /* Add this line first, it fixes blur for Safari*/
+  backdrop-filter: blur(20px);
+}
+
+:root {
+  /* This tells RainbowKit to use your custom font */
+  --rainbow-font-family: 'Gluten', serif;
+}
+
