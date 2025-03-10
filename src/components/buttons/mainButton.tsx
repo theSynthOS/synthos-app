@@ -35,7 +35,7 @@ export default function CustomButton({
         .customButton {
           --active: 0;
           color: white;
-          border-radius: 4px;
+          border-radius: 9999px;
           position: relative;
           cursor: pointer;
           font-family: var(--font-family);
@@ -61,6 +61,7 @@ export default function CustomButton({
           place-items: center;
           transition: 0.2s ease;
           border: 2px solid black;
+          border-radius: 9999px;
           translate: calc(
               (var(--active) * var(--coefficient, 0)) * (var(--step) * -1)
             )

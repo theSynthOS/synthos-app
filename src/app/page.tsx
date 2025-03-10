@@ -104,9 +104,9 @@ export default function Home() {
     >
       <div className="flex flex-row justify-between items-center pt-[7%] pb-[5%] px-[5%]">
         <h2 className="text-[3rem] font-bold">Featured Agent</h2>
-        <CustomButton className="text-[1.5rem] w-[200px]">
+        {/* <CustomButton className="text-[1.5rem] w-[200px]">
           Create Agent
-        </CustomButton>
+        </CustomButton> */}
       </div>
 
       {/* Main Layout: Grid of Agent Cards & a Sidebar Info Panel */}

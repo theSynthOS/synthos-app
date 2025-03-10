@@ -23,7 +23,7 @@ export interface AgentCardProps {
 export default function AgentCard({ agent, onClick }: AgentCardProps) {
   return (
     <div
-      className="group relative transition-transform duration-300 ease-out transform group-hover:scale-105 group-hover:shadow-xl h-80 overflow-hidden"
+      className="group relative transition-transform duration-300 ease-out transform group-hover:scale-105 group-hover:shadow-xl h-80 overflow-hidden rounded-[20px]"
       onClick={onClick}
     >
       {/* Agent image */}

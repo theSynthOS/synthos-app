@@ -15,11 +15,11 @@ const Modal: React.FC<ModalProps> = ({ onClose, title, children }) => {
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white/90 backdrop-blur-sm p-6 rounded-lg w-[400px] shadow-lg">
+      <div className="bg-white/90 backdrop-blur-sm p-6 rounded-lg w-[80%] h-[80vh] shadow-lg">
         <h2 className="text-2xl font-bold mb-4">{title}</h2>
         <div>{children}</div>
         <button

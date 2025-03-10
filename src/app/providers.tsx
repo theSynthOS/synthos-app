@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createConfig, WagmiProvider } from "wagmi";
-import { mainnet, goerli } from "wagmi/chains";
+import { mainnet, scrollSepolia } from "wagmi/chains";
 import { http } from "viem";
 import {
   getDefaultWallets,
@@ -15,7 +15,9 @@ import "@rainbow-me/rainbowkit/styles.css";
 import { ReactNode } from "react";
 
 // Define the chains your dApp will support
-const chains = [mainnet, goerli] as const;
+const chains = [mainnet, scrollSepolia] as const;
+console.log("Available Chains in Production:", chains);
+
 
 // Get the default connectors from RainbowKit (ensure you have a valid project ID)
 const { connectors } = getDefaultWallets({
@@ -29,7 +31,7 @@ const config = createConfig({
   connectors,
   transports: {
     [mainnet.id]: http(),
-    [goerli.id]: http(),
+    [scrollSepolia.id]: http(),
   },
 });
 
