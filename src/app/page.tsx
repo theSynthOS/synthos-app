@@ -5,6 +5,7 @@ import CustomButton from "../components/buttons/mainButton";
 import AgentCard, { Agent } from "../components/agentCard";
 import { Gluten } from "next/font/google";
 import Modal from "../components/detailModal";
+import ChatbotCard from "../components/chatbotCard";
 
 const gluten = Gluten({
   subsets: ["latin"],
@@ -97,6 +98,18 @@ export default function Home() {
   const [selectedButtonData, setSelectedButtonData] = useState<
     Agent["buttons"][0] | null
   >(null);
+  const [showChatbot, setShowChatbot] = useState(false);
+
+  // Function to handle button image click
+  const handleButtonImageClick = () => {
+    setShowChatbot(true);
+  };
+
+  // Function to handle start agent button click
+  const handleStartAgent = () => {
+    setShowChatbot(true);
+    setSelectedButtonData(null);
+  };
 
   return (
     <main
@@ -120,6 +133,7 @@ export default function Home() {
               onClick={() => {
                 setSelectedAgent(agent);
                 setSelectedButtonData(null); // Reset when switching agents
+                setShowChatbot(false); // Reset chatbot visibility
               }}
             />
           ))}
@@ -132,39 +146,63 @@ export default function Home() {
           onClose={() => setSelectedAgent(null)}
           title={selectedAgent.name}
         >
-          <div className="flex flex-row gap-4">
+          <div className="flex flex-col md:flex-row gap-4 h-full">
             {/* Left Section: Vertically Centered Buttons */}
-            <div className="flex flex-col gap-6 w-1/2">
-              {selectedAgent.buttons.map((btn, index) => (
-                <CustomButton
-                  key={index}
-                  className="text-lg"
-                  onClick={() => setSelectedButtonData(btn)}
-                >
-                  {btn.label}
-                </CustomButton>
-              ))}
+            <div className="flex flex-col gap-6 md:w-1/2">
+             
+              
+              {/* Agent Function Buttons */}
+              <div className="bg-[#1a1a4a] p-4 rounded-lg">
+                <h3 className="text-xl font-bold text-yellow-200 mb-4">Agent Functions</h3>
+                <div className="flex flex-col gap-3">
+                  {selectedAgent.buttons.map((btn, index) => (
+                    <CustomButton
+                      key={index}
+                      className="text-[1.2rem] p-2"
+                      onClick={() => {
+                        setSelectedButtonData(btn);
+                        setShowChatbot(false);
+                      }}
+                    >
+                      {btn.label}
+                    </CustomButton>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            {/* Right Section: Full Height Info Panel */}
-            <div className="w-1/2 bg-gray-100 p-6 rounded-lg h-[35vh] flex flex-col">
-              <h3 className="text-2xl font-bold mb-4">Info Panel</h3>
-              {selectedButtonData ? (
-                <div className="flex-1 flex flex-col">
-                  <p className="text-lg">{selectedButtonData.info}</p>
+            {/* Right Section: Button Details or Chatbot */}
+            <div className="md:w-1/2 h-full">
+              {showChatbot ? (
+                <ChatbotCard 
+                  agentId={selectedAgent.id}
+                  agentName={selectedAgent.name}
+                  title={`Chat with ${selectedAgent.name}`}
+                />
+              ) : selectedButtonData ? (
+                <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg h-full">
+                  <h3 className="text-xl font-bold mb-2">{selectedButtonData.label}</h3>
+                  <p className="text-gray-200 mb-4">{selectedButtonData.info}</p>
                   {selectedButtonData.description && (
-                    <p className="mt-2 text-sm">{selectedButtonData.description}</p>
+                    <p className="text-gray-300 mb-4">{selectedButtonData.description}</p>
                   )}
                   {selectedButtonData.imageUrl && (
-                    <img
-                      src={selectedButtonData.imageUrl}
-                      alt={selectedButtonData.label}
-                      className="mt-2 max-h-full object-contain"
-                    />
+                    <div className="relative group">
+                      <div className="absolute inset-0 flex items-center justify-start mt-8">
+                        <CustomButton
+                          className="text-[1.2rem] p-2"
+                          onClick={handleButtonImageClick}
+                        >
+                          Start Chat
+                        </CustomButton> 
+                      </div>
+                    </div>
                   )}
                 </div>
               ) : (
-                <p className="text-lg text-gray-500">Click a button to see details.</p>
+                <div className="flex items-center justify-center h-full text-gray-400">
+                  <p>Select a button or use the Start Agent button to interact with this agent</p>
+                </div>
               )}
             </div>
           </div>

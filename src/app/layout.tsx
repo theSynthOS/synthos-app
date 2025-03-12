@@ -1,6 +1,6 @@
 // app/layout.tsx
 import type { Metadata } from "next";
-import { Providers } from "./providers";
+import { ThirdwebProvider } from "thirdweb/react";
 import "../styles/globals.css";
 import Header from "../components/header";
 import { Gluten, Titillium_Web } from "next/font/google";
@@ -33,12 +33,12 @@ export default function RootLayout({
         className={`${gluten.className}`}
         style={{ backgroundColor: "#09092f", minWidth: "100vw" }}
       >
-        <Providers>
+        <ThirdwebProvider>
           <Header />
           <div className="w-full h-full px-[10%] text-yellow-500">
             {children}
           </div>
-        </Providers>
+        </ThirdwebProvider>
       </body>
     </html>
   );
