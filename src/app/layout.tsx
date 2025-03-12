@@ -31,11 +31,11 @@ export default function RootLayout({
     <html lang="en">
       <body
         className={`${gluten.className}`}
-        style={{ backgroundColor: "#f7f8e6", minWidth: "100vw" }}
+        style={{ backgroundColor: "#09092f", minWidth: "100vw" }}
       >
         <Providers>
           <Header />
-          <div className="w-full h-full px-[10%] text-[#043a68]">
+          <div className="w-full h-full px-[10%] text-yellow-500">
             {children}
           </div>
         </Providers>

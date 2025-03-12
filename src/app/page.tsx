@@ -4,7 +4,7 @@ import { useState } from "react";
 import CustomButton from "../components/buttons/mainButton";
 import AgentCard, { Agent } from "../components/agentCard";
 import { Gluten } from "next/font/google";
-import Modal from "../components/modal";
+import Modal from "../components/detailModal";
 
 const gluten = Gluten({
   subsets: ["latin"],
@@ -133,8 +133,8 @@ export default function Home() {
           title={selectedAgent.name}
         >
           <div className="flex flex-row gap-4">
-            {/* Left Section: List of Agent Buttons */}
-            <div className="flex flex-col gap-4 w-1/2">
+            {/* Left Section: Vertically Centered Buttons */}
+            <div className="flex flex-col gap-6 w-1/2">
               {selectedAgent.buttons.map((btn, index) => (
                 <CustomButton
                   key={index}
@@ -146,29 +146,25 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Right Section: Info Panel within Modal */}
-            <div className="w-1/2 bg-gray-100 p-6 rounded-lg">
+            {/* Right Section: Full Height Info Panel */}
+            <div className="w-1/2 bg-gray-100 p-6 rounded-lg h-[35vh] flex flex-col">
               <h3 className="text-2xl font-bold mb-4">Info Panel</h3>
               {selectedButtonData ? (
-                <div>
+                <div className="flex-1 flex flex-col">
                   <p className="text-lg">{selectedButtonData.info}</p>
                   {selectedButtonData.description && (
-                    <p className="mt-2 text-sm">
-                      {selectedButtonData.description}
-                    </p>
+                    <p className="mt-2 text-sm">{selectedButtonData.description}</p>
                   )}
                   {selectedButtonData.imageUrl && (
                     <img
                       src={selectedButtonData.imageUrl}
                       alt={selectedButtonData.label}
-                      className="mt-2"
+                      className="mt-2 max-h-full object-contain"
                     />
                   )}
                 </div>
               ) : (
-                <p className="text-lg text-gray-500">
-                  Click a button to see details.
-                </p>
+                <p className="text-lg text-gray-500">Click a button to see details.</p>
               )}
             </div>
           </div>

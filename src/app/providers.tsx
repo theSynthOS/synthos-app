@@ -37,22 +37,22 @@ const config = createConfig({
 
 // Create a base RainbowKit theme using lightTheme with your custom settings
 const baseTheme = lightTheme({
-  accentColor: "#043a68", // Button and accent color
-  accentColorForeground: "#f7f8e6", // Foreground (text) color on accent
-  borderRadius: "none", // No border rounding ("0px" instead of "none")
+  accentColor: "#eab308", // Button and accent color (yellow-500)
+  accentColorForeground: "#f7f8e6", // Foreground (text) color
   fontStack: "custom" as any, // Use custom font defined globally
   overlayBlur: "small",
 });
 
 // Extend the base theme by overriding text colors and adding CSS variables
-// for a 1px solid border, a blue overlay, and a small modal container.
 const myRainbowTheme = {
   ...baseTheme,
   colors: {
     ...baseTheme.colors,
-    modalText: "#043a68", // Text color inside modals
-    connectButtonText: "#043a68", // Text color on the Connect button
-    modalBorder: "#043a68",
+    modalText: "#f7f8e6", // Text color inside modals
+    connectButtonText: "#f7f8e6", // Text color on the Connect button
+    modalBorder: "#eab308", // Border color (yellow-500)
+    modalBackground: "#09092f", // Modal background color
+    connectButtonBackground: "#09092f", // Connect button background
   },
 };
 

@@ -21,7 +21,7 @@ export default function CustomButton({
       <span>{children}</span>
       <style jsx>{`
         :global(:root) {
-          --bg-color-1: #043a68;
+          --bg-color-1: #f0b000;
           --bg-color-2: rgb(255, 249, 73);
           --bg-color-3: #ffffff;
           --padding: 1rem 4rem;

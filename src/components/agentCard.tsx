@@ -2,6 +2,7 @@
 "use client";
 import React from "react";
 import CustomButton from "./buttons/mainButton";
+
 export interface Agent {
   id: string;
   name: string;
@@ -36,20 +37,20 @@ export default function AgentCard({ agent, onClick }: AgentCardProps) {
       <div className="absolute inset-0 overlay transition-all duration-500"></div>
       {/* Centered text: appears on hover */}
       <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-        <h3 className="text-white text-2xl font-bold mb-4 pt-[30%]">
+        <h3 className="text-yellow-200 text-2xl font-bold mb-4 pt-[30%]">
           {agent.name}
         </h3>
-        <CustomButton className="text-[1.5rem] w-[200px]">
+        <CustomButton className="text-[1.5rem] max-w-[200px] p-2 text-yellow-200">
           View Agents
         </CustomButton>
       </div>
       <style jsx>{`
         .overlay {
-          background: linear-gradient(to top, #043a68, transparent);
+          background: linear-gradient(to top,#09092f, transparent);
           opacity: 0;
         }
         .group:hover .overlay {
-          background: linear-gradient(to top, #032c57, transparent);
+          background: linear-gradient(to top,#09092f, transparent);
           opacity: 0.9;
         }
       `}</style>
