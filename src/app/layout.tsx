@@ -35,7 +35,7 @@ export default function RootLayout({
       >
         <ThirdwebProvider>
           <Header />
-          <div className="w-full h-full px-[10%] text-yellow-500">
+          <div className="w-full h-full px-[5%] text-yellow-500">
             {children}
           </div>
         </ThirdwebProvider>

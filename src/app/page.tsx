@@ -116,7 +116,7 @@ export default function Home() {
       className={`min-h-screen flex flex-col pt-[74px] ${gluten.className}`}
     >
       <div className="flex flex-row justify-between items-center pt-[7%] pb-[5%] px-[5%]">
-        <h2 className="text-[3rem] font-bold">Featured Agent</h2>
+        <h2 className="text-[1.5rem] md:text-[2rem] lg:text-[3rem] font-bold">Featured Agent</h2>
         {/* <CustomButton className="text-[1.5rem] w-[200px]">
           Create Agent
         </CustomButton> */}
@@ -153,12 +153,12 @@ export default function Home() {
               
               {/* Agent Function Buttons */}
               <div className="bg-[#1a1a4a] p-4 rounded-lg">
-                <h3 className="text-xl font-bold text-yellow-200 mb-4">Agent Functions</h3>
+                <h3 className="text-lg md:text-xl lg:text-2xl font-bold text-yellow-200 mb-4">Agent Functions</h3>
                 <div className="flex flex-col gap-3">
                   {selectedAgent.buttons.map((btn, index) => (
                     <CustomButton
                       key={index}
-                      className="text-[1.2rem] p-2"
+                      className="text-md md:text-lg lg:text-xl p-1"
                       onClick={() => {
                         setSelectedButtonData(btn);
                         setShowChatbot(false);
@@ -190,7 +190,7 @@ export default function Home() {
                     <div className="relative group">
                       <div className="absolute inset-0 flex items-center justify-start mt-8">
                         <CustomButton
-                          className="text-[1.2rem] p-2"
+                          className="text-md md:text-lg lg:text-xl px-3"
                           onClick={handleButtonImageClick}
                         >
                           Start Chat
