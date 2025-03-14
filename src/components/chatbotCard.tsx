@@ -22,7 +22,7 @@ export default function ChatbotCard({
   title = "AI Chatbot",
 }: ChatbotCardProps) {
   return (
-    <div className={`w-full h-full rounded-[20px] overflow-hidden bg-[#0d0d35] border border-gray-700 shadow-lg ${gluten.className}`}>
+    <div className={`w-full h-full rounded-[20px] overflow-hidden bg-[#0d0d35] border border-gray-700 shadow-lg ${gluten.className} pt-2`}>
       <div className="bg-[#1a1a4a] p-3 border-b border-gray-700">
         <h2 className="text-xl font-bold text-yellow-200">{title}</h2>
         <p className="text-sm text-gray-300">Powered by {agentName}</p>
