@@ -3,8 +3,8 @@
  */
 
 const AI_AGENT_URL = 'https://autonome.alt.technology/synthos-arimua/ed9ddab6-6713-055c-bca6-3390aee6bf72/message';
-const USERNAME = 'synthos';
-const PASSWORD = 'mWeImrCabs';
+const USERNAME = process.env.NEXT_PUBLIC_USERNAME;
+const PASSWORD = process.env.NEXT_PUBLIC_PASSWORD;
 
 // Agent logs API endpoint - now using our local API route
 const AGENT_LOGS_API_ROUTE = '/api/agent-logs';
