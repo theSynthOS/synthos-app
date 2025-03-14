@@ -20,6 +20,9 @@ const titilliumWeb = Titillium_Web({
 export const metadata: Metadata = {
   title: "Synth OS",
   description: "A decentralized operating system for the future",
+  icons: {
+    icon: "/logo.jpeg",
+  },
 };
 
 export default function RootLayout({
