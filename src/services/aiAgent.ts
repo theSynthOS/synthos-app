@@ -94,6 +94,13 @@ export async function sendMessageToAgent(
  */
 export async function fetchAgentLogs(agentId: string): Promise<AgentLogEntry[]> {
   try {
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(agentId)) {
+      console.error(`Invalid UUID format: ${agentId}`);
+      throw new Error(`Invalid UUID format: ${agentId}. The agent ID must be a valid UUID.`);
+    }
+    
     // Use our local API route instead of calling the external API directly
     const url = `${AGENT_LOGS_API_ROUTE}/${agentId}`;
     console.log('Fetching agent logs from:', url);
@@ -127,6 +134,7 @@ export async function fetchAgentLogs(agentId: string): Promise<AgentLogEntry[]> 
       return data;
     }
     
+    console.warn('Unexpected data format received from logs API:', data);
     return [];
   } catch (error) {
     console.error('Error fetching agent logs:', error);

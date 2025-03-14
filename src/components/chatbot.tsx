@@ -94,11 +94,12 @@ export default function Chatbot({
     setLogError(null);
     
     try {
-      // Use the fixed agent ID
-      const agentId = "d7d9277b-850a-44a1-84e1-8506e9488f33";
-      console.log('Loading agent logs for ID:', agentId);
+      // Use a valid UUID format for the agent ID
+      // The error shows that "2" is not a valid UUID format
+      const validAgentId = "d7d9277b-850a-44a1-84e1-8506e9488f33";
+      console.log('Loading agent logs for ID:', validAgentId);
       
-      const logs = await fetchAgentLogs(agentId);
+      const logs = await fetchAgentLogs(validAgentId);
       console.log('Logs received in component:', logs);
       
       if (logs && logs.length > 0) {
