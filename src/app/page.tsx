@@ -37,10 +37,10 @@ const agents: Agent[] = [
   {
     id: "3",
     name: "Swap Agent",
-    logo: "/images/defi.png",
+    logo: "/images/swap.png",
     buttons: [
       {
-        label: "Swap Button 1",
+        label: "Aave",
         info: "Swap Button 1: Helps with token conversion.",
         description: "Converts tokens using the best available rate.",
         imageUrl: "/images/swap1.png",
@@ -55,42 +55,24 @@ const agents: Agent[] = [
   },
   {
     id: "2",
-    name: "Swap Agent",
-    logo: "/images/defi.png",
+    name: "Stake Agent",
+    logo: "/images/stake.png",
     buttons: [
       {
-        label: "Swap Button 1",
-        info: "Swap Button 1: Helps with token conversion.",
+        label: "Stake Button 1",
+        info: "Stake Button 1: Helps with token conversion.",
         description: "Converts tokens using the best available rate.",
         imageUrl: "/images/swap1.png",
       },
       {
-        label: "Swap Button 2",
-        info: "Swap Button 2: Offers optimized routing.",
+        label: "Stake Button 2",
+        info: "Stake Button 2: Offers optimized routing.",
         description: "Provides routing optimization for swaps.",
         imageUrl: "/images/swap2.png",
       },
     ],
   },
-  {
-    id: "4",
-    name: "Swap Agent",
-    logo: "/images/defi.png",
-    buttons: [
-      {
-        label: "Swap Button 1",
-        info: "Swap Button 1: Helps with token conversion.",
-        description: "Converts tokens using the best available rate.",
-        imageUrl: "/images/swap1.png",
-      },
-      {
-        label: "Swap Button 2",
-        info: "Swap Button 2: Offers optimized routing.",
-        description: "Provides routing optimization for swaps.",
-        imageUrl: "/images/swap2.png",
-      },
-    ],
-  },
+
 ];
 
 export default function Home() {
