@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Gluten } from "next/font/google";
-import { sendMessageToAgent, fetchAgentLogs } from "../services/aiAgent";
+import { sendMessageToAgent, fetchAgentLogs, fetchAVSLogs } from "../services/aiAgent";
 
 const gluten = Gluten({
   subsets: ["latin"],
@@ -39,16 +39,20 @@ export default function Chatbot({
   agentName = "AI Assistant",
   height = "100%" 
 }: ChatbotProps) {
-  const [activeTab, setActiveTab] = useState<"chat" | "log">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "log" | "avs">("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [agentLogs, setAgentLogs] = useState<AgentLog[]>([]);
+  const [avsLogs, setAVSLogs] = useState<AgentLog[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isChatEnded, setIsChatEnded] = useState(false);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [isLoadingAVSLogs, setIsLoadingAVSLogs] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
+  const [avsLogError, setAVSLogError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const avsLogsEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-scroll to bottom of messages
@@ -60,6 +64,11 @@ export default function Chatbot({
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [agentLogs]);
+
+  // Auto-scroll to bottom of AVS logs
+  useEffect(() => {
+    avsLogsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [avsLogs]);
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -80,15 +89,19 @@ export default function Chatbot({
       };
       setMessages([welcomeMessage]);
     }
-  }, [agentName]);
+  }, [agentName, messages.length]);
 
   // Fetch agent logs when the log tab is activated
   useEffect(() => {
     if (activeTab === "log" && agentLogs.length === 0) {
       loadAgentLogs();
+    } else if (activeTab === "avs" && avsLogs.length === 0) {
+      loadAVSLogs();
     }
-  }, [activeTab]);
+  }, [activeTab, agentLogs.length, avsLogs.length]);
 
+
+  // AGENT LOG
   const loadAgentLogs = async () => {
     setIsLoadingLogs(true);
     setLogError(null);
@@ -99,7 +112,7 @@ export default function Chatbot({
       const validAgentId = "d7d9277b-850a-44a1-84e1-8506e9488f33";
       console.log('Loading agent logs for ID:', validAgentId);
       
-      const logs = await fetchAgentLogs(validAgentId);
+      const logs = await fetchAgentLogs();
       console.log('Logs received in component:', logs);
       
       if (logs && logs.length > 0) {
@@ -119,6 +132,37 @@ export default function Chatbot({
       setLogError(`Error loading logs: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsLoadingLogs(false);
+    }
+  };
+
+  // AVS LOG
+  const loadAVSLogs = async () => {
+    setIsLoadingAVSLogs(true);
+    setAVSLogError(null);
+    
+    try {
+      console.log('Loading AVS logs');
+      
+      const logs = await fetchAVSLogs();
+      console.log('AVS logs received in component:', logs);
+      
+      if (logs && logs.length > 0) {
+        // Sort logs by timestamp (newest first)
+        const sortedLogs = [...logs].sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        
+        setAVSLogs(sortedLogs);
+        console.log('Successfully set AVS logs:', sortedLogs.length, 'entries');
+      } else {
+        console.warn('No AVS logs returned from API');
+        setAVSLogError('No AVS logs available. You may not have permission to view logs or no logs have been generated yet.');
+      }
+    } catch (error) {
+      console.error("Error loading AVS logs:", error);
+      setAVSLogError(`Error loading AVS logs: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsLoadingAVSLogs(false);
     }
   };
 
@@ -190,6 +234,75 @@ export default function Chatbot({
     }
   };
 
+  // Render logs (used for both agent and AVS logs)
+  const renderLogs = (
+    logs: AgentLog[], 
+    error: string | null, 
+    isLoading: boolean, 
+    loadFunction: () => void, 
+    endRef: React.RefObject<HTMLDivElement | null>
+  ) => {
+    if (isLoading) {
+      return (
+        <div className="flex justify-center items-center h-32">
+          <div className="flex space-x-2">
+            <div className="w-3 h-3 rounded-full bg-yellow-200 animate-bounce"></div>
+            <div className="w-3 h-3 rounded-full bg-yellow-200 animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+            <div className="w-3 h-3 rounded-full bg-yellow-200 animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+          </div>
+        </div>
+      );
+    }
+    
+    if (error) {
+      return (
+        <div className="bg-red-900/30 p-4 rounded-lg mb-4">
+          <p className="text-red-300">{error}</p>
+        </div>
+      );
+    }
+    
+    if (logs.length === 0) {
+      return <p className="text-gray-400">No logs available</p>;
+    }
+    
+    return (
+      <div className="space-y-4">
+        {logs.map((log, index) => (
+          <div key={index} className="border-b border-gray-700 pb-3">
+            <div className="flex justify-between items-start">
+              <span className={`font-bold ${getLevelColor(log.level)}`}>
+                {log.level.toUpperCase()}
+              </span>
+              <span className="text-gray-400 text-sm">
+                {formatTimestamp(log.timestamp)}
+              </span>
+            </div>
+            <p className="text-white mt-1 whitespace-pre-wrap">{log.message}</p>
+            {log.metadata && Object.keys(log.metadata).length > 0 && (
+              <div className="mt-2 bg-[#1a1a4a] p-2 rounded text-xs">
+                <pre className="text-gray-300 overflow-x-auto">
+                  {JSON.stringify(log.metadata, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        ))}
+        <div ref={endRef} />
+        
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={loadFunction}
+            className="bg-[#1a1a4a] text-yellow-200 px-4 py-2 rounded-lg hover:bg-[#2a2a5a] transition-colors"
+            disabled={isLoading}
+          >
+            {isLoading ? "Loading..." : "Refresh Logs"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className={`flex flex-col h-full w-full overflow-hidden ${gluten.className}`}>
       {/* Tabs */}
@@ -214,16 +327,16 @@ export default function Chatbot({
         >
           Agent Log
         </button>
-         {/* <button
+        <button
           className={`px-4 py-2 text-sm md:text-lg ${
-            activeTab === "log"
+            activeTab === "avs"
               ? "bg-[#1a1a4a] text-yellow-200 border-b-2 border-yellow-200"
               : "text-gray-300 hover:bg-[#1a1a4a]"
           }`}
-          onClick={() => setActiveTab("log")}
+          onClick={() => setActiveTab("avs")}
         >
           AVS Log
-        </button> */}
+        </button>
       </div>
 
       {/* Content */}
@@ -304,59 +417,15 @@ export default function Chatbot({
               )}
             </div>
           </div>
-        ) : (
+        ) : activeTab === "log" ? (
           <div className="p-4 h-full overflow-y-auto">
             <h3 className="text-xl font-bold text-yellow-200 mb-4">Agent Activity Log</h3>
-            
-            {isLoadingLogs ? (
-              <div className="flex justify-center items-center h-32">
-                <div className="flex space-x-2">
-                  <div className="w-3 h-3 rounded-full bg-yellow-200 animate-bounce"></div>
-                  <div className="w-3 h-3 rounded-full bg-yellow-200 animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                  <div className="w-3 h-3 rounded-full bg-yellow-200 animate-bounce" style={{ animationDelay: "0.4s" }}></div>
-                </div>
-              </div>
-            ) : logError ? (
-              <div className="bg-red-900/30 p-4 rounded-lg mb-4">
-                <p className="text-red-300">{logError}</p>
-              </div>
-            ) : agentLogs.length === 0 ? (
-              <p className="text-gray-400">No agent logs available</p>
-            ) : (
-              <div className="space-y-4">
-                {agentLogs.map((log, index) => (
-                  <div key={index} className="border-b border-gray-700 pb-3">
-                    <div className="flex justify-between items-start">
-                      <span className={`font-bold ${getLevelColor(log.level)}`}>
-                        {log.level.toUpperCase()}
-                      </span>
-                      <span className="text-gray-400 text-sm">
-                        {formatTimestamp(log.timestamp)}
-                      </span>
-                    </div>
-                    <p className="text-white mt-1 whitespace-pre-wrap">{log.message}</p>
-                    {log.metadata && Object.keys(log.metadata).length > 0 && (
-                      <div className="mt-2 bg-[#1a1a4a] p-2 rounded text-xs">
-                        <pre className="text-gray-300 overflow-x-auto">
-                          {JSON.stringify(log.metadata, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <div ref={logsEndRef} />
-              </div>
-            )}
-            
-            <div className="mt-4 flex justify-center">
-              <button
-                onClick={loadAgentLogs}
-                className="bg-[#1a1a4a] text-yellow-200 px-4 py-2 rounded-lg hover:bg-[#2a2a5a] transition-colors"
-                disabled={isLoadingLogs}
-              >
-                {isLoadingLogs ? "Loading..." : "Refresh Logs"}
-              </button>
-            </div>
+            {renderLogs(agentLogs, logError, isLoadingLogs, loadAgentLogs, logsEndRef)}
+          </div>
+        ) : (
+          <div className="p-4 h-full overflow-y-auto">
+            <h3 className="text-xl font-bold text-yellow-200 mb-4">AVS Log</h3>
+            {renderLogs(avsLogs, avsLogError, isLoadingAVSLogs, loadAVSLogs, avsLogsEndRef)}
           </div>
         )}
       </div>
