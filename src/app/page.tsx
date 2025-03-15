@@ -8,7 +8,7 @@ import { fetchAgentLogs } from "../services/aiAgent";
 import Modal from "../components/detailModal";
 import { LampContainer } from "../components/ui/lamp";
 import { motion } from "framer-motion";
-import { BackgroundGradientAnimation } from "../components/ui/background-gradient";
+import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
 
 // Mock agent data - this would come from your smart contract
 const agentData = {
@@ -104,7 +104,12 @@ export default function Home() {
     <main
       className={`min-h-screen flex flex-col space-grotesk relative`}
     >
-      <BackgroundGradientAnimation containerClassName="absolute inset-0 z-0" />
+      <motion.div 
+        style={{ opacity:1 }} 
+        className="absolute inset-0 "
+      >
+        <BackgroundGradientAnimation containerClassName="absolute inset-0 z-0" />
+      </motion.div>
       
       {/* Banner Area */}
       <div className="relative z-10 pt-[76px] md:pt-[86px] flex flex-col items-center justify-center min-h-[40vh] bg-white/5 backdrop-blur-sm  ">
@@ -294,7 +299,7 @@ export default function Home() {
             <div className="bg-[#1a1a4a] p-8 rounded-lg text-center max-w-md">
               <h2 className="text-2xl font-bold text-yellow-200 mb-4">Upcoming in V2</h2>
               <p className="text-gray-200 mb-6">
-                We're working hard to bring you the ability to create and deploy your own agents.
+                We&apos;re working hard to bring you the ability to create and deploy your own agents.
                 This feature will be available in our next major release.
               </p>
               <p className="text-gray-300 mb-8">
