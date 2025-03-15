@@ -95,9 +95,9 @@ export default function Home() {
 
   return (
     <main
-      className={`min-h-screen flex flex-col pt-[74px] ${gluten.className}`}
+      className={`min-h-screen flex flex-col pt-[76px] md:pt-[50px] ${gluten.className}`}
     >
-      <div className="flex flex-row justify-between items-center pt-[7%] pb-[5%] px-[5%]">
+      <div className="flex flex-row justify-between items-center pt-[7%] pb-[2%] px-[5%]">
         <h2 className="text-[1.5rem] md:text-[2rem] lg:text-[3rem] font-bold">Featured Agent</h2>
         {/* <CustomButton className="text-[1.5rem] w-[200px]">
           Create Agent

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { ThirdwebProvider } from "thirdweb/react";
 import "../styles/globals.css";
 import Header from "../components/header";
-import { Gluten, Titillium_Web } from "next/font/google";
+import { Gluten, Titillium_Web, Cinzel } from "next/font/google";
 
 const gluten = Gluten({
   subsets: ["latin"],
@@ -33,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${gluten.className}`}
+        className={`${gluten.className}`}  // Use gluten font for the body
         style={{ backgroundColor: "#09092f", minWidth: "100vw" }}
       >
         <ThirdwebProvider>
