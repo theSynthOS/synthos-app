@@ -2,6 +2,7 @@
 "use client";
 import React from "react";
 import CustomButton from "./buttons/mainButton";
+import Image from "next/image";
 
 export interface Agent {
   id: string;
@@ -28,9 +29,11 @@ export default function AgentCard({ agent, onClick }: AgentCardProps) {
       onClick={onClick}
     >
       {/* Agent image */}
-      <img
+      <Image
         src={agent.logo}
         alt={agent.name}
+        width={500}
+        height={500}
         className="w-full h-full object-cover"
       />
       {/* Gradient overlay: transitions to a darker overlay on hover */}

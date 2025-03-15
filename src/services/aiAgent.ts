@@ -2,12 +2,15 @@
  * Service for interacting with the AI agent
  */
 
-const AI_AGENT_URL = 'https://autonome.alt.technology/synthos-arimua/ed9ddab6-6713-055c-bca6-3390aee6bf72/message';
-const USERNAME = process.env.NEXT_PUBLIC_USERNAME;
-const PASSWORD = process.env.NEXT_PUBLIC_PASSWORD;
+const AI_AGENT_URL = process.env.NEXT_PUBLIC_AI_AGENT || '';
+const USERNAME = process.env.NEXT_PUBLIC_USERNAME || '';
+const PASSWORD = process.env.NEXT_PUBLIC_PASSWORD || '';
 
 // Agent logs API endpoint - now using our local API route
 const AGENT_LOGS_API_ROUTE = '/api/agent-logs';
+
+// AVS logs API endpoint
+const AVS_LOGS_API_ROUTE = '/api/avs-logs';
 
 interface AiAgentRequest {
   text: string;
@@ -89,20 +92,12 @@ export async function sendMessageToAgent(
 
 /**
  * Fetch agent logs from the API
- * @param agentId The ID of the agent to fetch logs for
  * @returns Array of agent log entries
  */
-export async function fetchAgentLogs(agentId: string): Promise<AgentLogEntry[]> {
+export async function fetchAgentLogs(): Promise<AgentLogEntry[]> {
   try {
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(agentId)) {
-      console.error(`Invalid UUID format: ${agentId}`);
-      throw new Error(`Invalid UUID format: ${agentId}. The agent ID must be a valid UUID.`);
-    }
-    
-    // Use our local API route instead of calling the external API directly
-    const url = `${AGENT_LOGS_API_ROUTE}/${agentId}`;
+    // Use the local API route
+    const url = `/api/agent-logs`;
     console.log('Fetching agent logs from:', url);
     
     const response = await fetch(url, {
@@ -124,7 +119,7 @@ export async function fetchAgentLogs(agentId: string): Promise<AgentLogEntry[]> 
     const data = await response.json();
     console.log('Agent logs data received:', data);
     
-    // Check if data has the expected structure based on the adapt.ai example
+    // Check if data has the expected structure
     if (data.log && Array.isArray(data.log)) {
       return data.log;
     }
@@ -138,6 +133,52 @@ export async function fetchAgentLogs(agentId: string): Promise<AgentLogEntry[]> 
     return [];
   } catch (error) {
     console.error('Error fetching agent logs:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch AVS logs from the API
+ * @returns Array of log entries
+ */
+export async function fetchAVSLogs(): Promise<AgentLogEntry[]> {
+  try {
+    const url = AVS_LOGS_API_ROUTE;
+    console.log('Fetching AVS logs from:', url);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+    });
+    
+    console.log('AVS logs response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error response from AVS logs API:', errorText);
+      throw new Error(`Error fetching AVS logs: ${response.status} - ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('AVS logs data received:', data);
+    
+    // Check if data has the expected structure
+    if (data.log && Array.isArray(data.log)) {
+      return data.log;
+    }
+    
+    // Fallback for other response formats
+    if (Array.isArray(data)) {
+      return data;
+    }
+    
+    console.warn('Unexpected data format received from AVS logs API:', data);
+    return [];
+  } catch (error) {
+    console.error('Error fetching AVS logs:', error);
     throw error;
   }
 } 
