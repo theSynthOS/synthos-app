@@ -16,7 +16,7 @@ const gluten = Gluten({
 // Sample dynamic data for agents
 const agents: Agent[] = [
   {
-    id: "1",
+    id: process.env.NEXT_PUBLIC_AGENT_ID || '',
     name: "Dex Agent",
     logo: "/images/defi.png",
     buttons: [

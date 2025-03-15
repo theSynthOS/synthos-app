@@ -1,9 +1,11 @@
 // app/layout.tsx
 import type { Metadata } from "next";
-import { ThirdwebProvider } from "thirdweb/react";
+import { ConnectButton, ThirdwebProvider } from "thirdweb/react";
 import "../styles/globals.css";
 import Header from "../components/header";
 import { Gluten, Titillium_Web } from "next/font/google";
+import { wallets } from "./WalletProvider";
+import { createThirdwebClient } from "thirdweb";
 
 const gluten = Gluten({
   subsets: ["latin"],

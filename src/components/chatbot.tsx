@@ -54,6 +54,10 @@ export default function Chatbot({
   const logsEndRef = useRef<HTMLDivElement>(null);
   const avsLogsEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
+    "Hey, I have $1000 and I would like to invest. What's the best recommendation for me?",
+    "Based on my smart wallet balance, whats the best investment for me?",
+  ]);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -166,6 +170,37 @@ export default function Chatbot({
     }
   };
 
+  // Function to generate contextual follow-up questions based on agent's response
+  const generateFollowUpQuestions = (agentMessage: string): string[] => {
+    // Default questions if no specific context is detected
+    const defaultQuestions = [
+      "Can you explain more about the risks involved?",
+      "What are the potential returns?",
+      "How long should I hold this investment?"
+    ];
+    
+    // Check for specific contexts in the agent's message and provide relevant follow-ups
+    if (agentMessage.includes("I'd be happy to help you with an investment plan for Aave. Could you please tell me which asset you're interested in (WBTC, USDC, DAI, etc.) and how much you're planning to invest?") || agentMessage.includes("which asset")) {
+      return [
+        "I prefer something that is low risk",
+        "What's the best option for high returns?",
+        "I'm interested in USDC",
+        "Tell me more about WBTC"
+      ];
+    }
+    
+    if (agentMessage.includes("risk")) {
+      return [
+        "I prefer low-risk investments",
+        "I'm comfortable with moderate risk",
+        "I'm looking for high-risk, high-reward options",
+      ];
+    }
+    
+    
+    return defaultQuestions;
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isChatEnded) return;
@@ -183,14 +218,39 @@ export default function Chatbot({
     try {
       // Call the AI agent service
       const response = await sendMessageToAgent(input, agentId);
-      
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: response.response,
-        timestamp: new Date(),
-        metadata: response.metadata,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log("GOES HEREEEEE");
+        response.map((item: any) => {
+          console.log("item: ", item);
+          const assistantMessage: Message = {
+            role: "assistant",
+            content: item.text,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, assistantMessage]);
+          
+          // Generate new suggested questions based on the response content
+          setSuggestedQuestions(generateFollowUpQuestions(item.text));
+        })
+      } else {
+        console.log("GOES HERE ELSE");
+        const assistantMessage: Message = {
+          role: "assistant",
+          content: response.response,
+          timestamp: new Date(),
+          metadata: response.metadata,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        
+        // Generate new suggested questions based on the response content
+        // Use metadata.suggestedQuestions if available, otherwise generate them
+        if (response.metadata?.suggestedQuestions) {
+          setSuggestedQuestions(response.metadata.suggestedQuestions);
+        } else {
+          setSuggestedQuestions(generateFollowUpQuestions(response.response));
+        }
+      }
       
       // Check if the chat should end
       if (response.metadata?.action === "END") {
@@ -207,6 +267,74 @@ export default function Chatbot({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Function to handle clicking a suggested question
+  const handleSuggestedQuestion = (question: string) => {
+    if (isChatEnded) return;
+    
+    // Add user message
+    const userMessage: Message = {
+      role: "user",
+      content: question,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
+
+    // Process the question just like a normal message
+    sendMessageToAgent(question, agentId)
+      .then(response => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("GOES HEREEEEE");
+          response.map((item: any) => {
+            console.log("item: ", item);
+            const assistantMessage: Message = {
+              role: "assistant",
+              content: item.text,
+              timestamp: new Date(),
+            };
+            setMessages((prev) => [...prev, assistantMessage]);
+            
+            // Generate new suggested questions based on the response content
+            setSuggestedQuestions(generateFollowUpQuestions(item.text));
+          })
+        } else {
+          console.log("GOES HERE ELSE");
+          const assistantMessage: Message = {
+            role: "assistant",
+            content: response.response,
+            timestamp: new Date(),
+            metadata: response.metadata,
+          };
+          setMessages((prev) => [...prev, assistantMessage]);
+          
+          // Generate new suggested questions based on the response content
+          // Use metadata.suggestedQuestions if available, otherwise generate them
+          if (response.metadata?.suggestedQuestions) {
+            setSuggestedQuestions(response.metadata.suggestedQuestions);
+          } else {
+            setSuggestedQuestions(generateFollowUpQuestions(response.response));
+          }
+        }
+        
+        // Check if the chat should end
+        if (response.metadata?.action === "END") {
+          setIsChatEnded(true);
+        }
+      })
+      .catch(error => {
+        console.error("Error sending message:", error);
+        const errorMessage: Message = {
+          role: "assistant",
+          content: "Sorry, there was an error processing your request. Please try again later.",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
   // Format timestamp for display
@@ -379,6 +507,24 @@ export default function Chatbot({
               )}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* Suggested Questions - Show after any assistant message, not just at the beginning */}
+            {!isLoading && !isChatEnded && messages.length > 0 && messages[messages.length-1].role === "assistant" && (
+              <div className="px-4 pb-3">
+                <p className="text-yellow-200 text-sm mb-2">You might want to ask:</p>
+                <div className="flex flex-wrap gap-2">
+                  {suggestedQuestions.map((question, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleSuggestedQuestion(question)}
+                      className="bg-[#2a2a5a] text-white px-3 py-2 rounded-lg text-sm hover:bg-[#3a3a6a] transition-colors"
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Input */}
             <div className="p-3 border-t border-gray-700">
