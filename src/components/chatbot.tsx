@@ -128,43 +128,38 @@ export default function Chatbot({
     try {
       // Call the AI agent service
       const response = await sendMessageToAgent(input, agentId);
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log("GOES HEREEEEE");
-        response.map((item: any) => {
-          console.log("item: ", item);
+      
+      // Process the response (which is now always an array of items)
+      if (Array.isArray(response)) {
+        response.forEach((item) => {
           const assistantMessage: Message = {
             role: "assistant",
             content: item.text,
             timestamp: new Date(),
+            metadata: {
+              user: item.user,
+              action: item.action
+            }
           };
           setMessages((prev) => [...prev, assistantMessage]);
           
           // Generate new suggested questions based on the response content
           setSuggestedQuestions(generateFollowUpQuestions(item.text));
-        })
+          
+          // Check if the chat should end
+          if (item.action === "END") {
+            setIsChatEnded(true);
+          }
+        });
       } else {
-        console.log("GOES HERE ELSE");
-        const assistantMessage: Message = {
+        // Fallback for unexpected response format
+        console.error("Unexpected response format:", response);
+        const errorMessage: Message = {
           role: "assistant",
-          content: response.response,
+          content: "Sorry, I received an unexpected response format. Please try again.",
           timestamp: new Date(),
-          metadata: response.metadata,
         };
-        setMessages((prev) => [...prev, assistantMessage]);
-        
-        // Generate new suggested questions based on the response content
-        // Use metadata.suggestedQuestions if available, otherwise generate them
-        if (response.metadata?.suggestedQuestions) {
-          setSuggestedQuestions(response.metadata.suggestedQuestions);
-        } else {
-          setSuggestedQuestions(generateFollowUpQuestions(response.response));
-        }
-      }
-      
-      // Check if the chat should end
-      if (response.metadata?.action === "END") {
-        setIsChatEnded(true);
+        setMessages((prev) => [...prev, errorMessage]);
       }
     } catch (error) {
       console.error("Error sending message:", error);
@@ -195,42 +190,37 @@ export default function Chatbot({
     // Process the question just like a normal message
     sendMessageToAgent(question, agentId)
       .then(response => {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("GOES HEREEEEE");
-          response.map((item: any) => {
-            console.log("item: ", item);
+        // Process the response (which is now always an array of items)
+        if (Array.isArray(response)) {
+          response.forEach((item) => {
             const assistantMessage: Message = {
               role: "assistant",
               content: item.text,
               timestamp: new Date(),
+              metadata: {
+                user: item.user,
+                action: item.action
+              }
             };
             setMessages((prev) => [...prev, assistantMessage]);
             
             // Generate new suggested questions based on the response content
             setSuggestedQuestions(generateFollowUpQuestions(item.text));
-          })
+            
+            // Check if the chat should end
+            if (item.action === "END") {
+              setIsChatEnded(true);
+            }
+          });
         } else {
-          console.log("GOES HERE ELSE");
-          const assistantMessage: Message = {
+          // Fallback for unexpected response format
+          console.error("Unexpected response format:", response);
+          const errorMessage: Message = {
             role: "assistant",
-            content: response.response,
+            content: "Sorry, I received an unexpected response format. Please try again.",
             timestamp: new Date(),
-            metadata: response.metadata,
           };
-          setMessages((prev) => [...prev, assistantMessage]);
-          
-          // Generate new suggested questions based on the response content
-          // Use metadata.suggestedQuestions if available, otherwise generate them
-          if (response.metadata?.suggestedQuestions) {
-            setSuggestedQuestions(response.metadata.suggestedQuestions);
-          } else {
-            setSuggestedQuestions(generateFollowUpQuestions(response.response));
-          }
-        }
-        
-        // Check if the chat should end
-        if (response.metadata?.action === "END") {
-          setIsChatEnded(true);
+          setMessages((prev) => [...prev, errorMessage]);
         }
       })
       .catch(error => {
