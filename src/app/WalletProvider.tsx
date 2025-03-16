@@ -1,4 +1,5 @@
 import { inAppWallet } from "thirdweb/wallets";
+import { scrollSepolia } from "../client";
 
 export const wallets = [
   inAppWallet(
@@ -14,8 +15,10 @@ export const wallets = [
           "passkey",
         ],
       },
-
+      smartAccount: {
+        chain: scrollSepolia,
+        sponsorGas: false,
+      },
     },
-    // or bring your own auth endpoint
   ),
 ];

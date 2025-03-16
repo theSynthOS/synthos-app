@@ -2,12 +2,15 @@
  * Service for interacting with the AI agent
  */
 
-const AI_AGENT_URL = process.env.NEXT_PUBLIC_AI_AGENT || '';
 const USERNAME = process.env.NEXT_PUBLIC_USERNAME || '';
 const PASSWORD = process.env.NEXT_PUBLIC_PASSWORD || '';
 
-// Agent logs API endpoint - now using our local API route
-const AGENT_LOGS_API_ROUTE = '/api/agent-logs';
+// Determine if we're in development mode
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+// Agent endpoint - use different values based on environment
+const AGENT_ENDPOINT = process.env.NEXT_PUBLIC_AI_AGENT || '';
+
 
 interface AiAgentRequest {
   text: string;
@@ -35,54 +38,58 @@ interface AgentLogEntry {
 /**
  * Send a message to the AI agent and get a response
  */
-export async function sendMessageToAgent(
-  message: string,
-  agentId?: string,
-  context?: Record<string, any>
-): Promise<AiAgentResponse> {
+export async function sendMessageToAgent(message: string, agentId?: string) {
+  console.log(`Sending message to agent: ${isDevelopment ? 'Development mode' : 'Production mode'}`);
+  console.log(`Using endpoint: ${AGENT_ENDPOINT}`);
+  
   try {
-    // Create Basic Auth header
-    const basicAuth = btoa(`${USERNAME}:${PASSWORD}`);
-    
-    const payload: AiAgentRequest = {
-      text: message,
-    };
-
-    const response = await fetch(AI_AGENT_URL, {
+    let data;
+    if (isDevelopment) {
+    // Call the agent (using the appropriate endpoint based on environment)
+    const response = await fetch(AGENT_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${basicAuth}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        user: "user",
+        text: message,
+      }),
     });
 
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status} - ${response.statusText}`);
-    }
+    console.log(response);
 
-    const data = await response.json();
-    
-    // Handle array response format
-    if (Array.isArray(data)) {
-      // Extract the text from the first item in the array
-      const firstItem = data[0] as AiAgentResponseItem;
-      return {
-        response: firstItem.text,
-        metadata: { 
-          user: firstItem.user, 
-          action: firstItem.action 
-        },
-      };
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status} ${response.statusText}`);
+    }
+  
+    data = await response.json();
+    console.log(data);
+  }else {
+    // Call the agent (using the appropriate endpoint based on environment)
+    const response = await fetch(AGENT_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+       message: message,
+       agentId: agentId,
+      }),
+    });
+
+    console.log(response);
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status} ${response.statusText}`);
     }
     
-    // Format the response to match our expected interface
-    return {
-      response: data.text || data.response || JSON.stringify(data),
-      metadata: data.metadata || {},
-    };
+
+    data = await response.json();
+  }
+    return data;
   } catch (error) {
-    console.error('Error sending message to AI agent:', error);
+    console.error('Error sending message to agent:', error);
     throw error;
   }
 }
@@ -91,42 +98,21 @@ export async function sendMessageToAgent(
  * Fetch agent logs from the API
  * @returns Array of agent log entries
  */
-export async function fetchAgentLogs(): Promise<AgentLogEntry[]> {
+export async function fetchAgentLogs() {
+  // In development, return empty logs
+  if (isDevelopment) {
+    console.log('Agent logs not available in development mode');
+    return [];
+  }
+  
   try {
-    // Use the local API route
-    const url = `/api/agent-logs`;
-    console.log('Fetching agent logs from:', url);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store',
-    });
-    
-    console.log('Agent logs response status:', response.status);
-    
+    const response = await fetch('/api/agent-logs');
     if (!response.ok) {
       console.error(`Error fetching agent logs: ${response.status} - ${response.statusText}`);
       return [];
     }
-    
     const data = await response.json();
-    console.log('Agent logs data received:', data);
-    
-    // Check if data has the expected structure
-    if (data.log && Array.isArray(data.log)) {
-      return data.log;
-    }
-    
-    // Fallback for other response formats
-    if (Array.isArray(data)) {
-      return data;
-    }
-    
-    console.warn('Unexpected data format received from logs API:', data);
-    return [];
+    return data.log || [];
   } catch (error) {
     console.error('Error fetching agent logs:', error);
     return [];

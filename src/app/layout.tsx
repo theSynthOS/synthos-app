@@ -1,9 +1,11 @@
 // app/layout.tsx
 import type { Metadata } from "next";
-import { ThirdwebProvider } from "thirdweb/react";
+import { ConnectButton, ThirdwebProvider } from "thirdweb/react";
 import "../styles/globals.css";
 import Header from "../components/header";
 import { Gluten, Titillium_Web, Roboto_Mono, Space_Grotesk } from "next/font/google";
+import { wallets } from "./WalletProvider";
+import { createThirdwebClient } from "thirdweb";
 
 const roboto_mono = Roboto_Mono({
   subsets: ["latin"],
