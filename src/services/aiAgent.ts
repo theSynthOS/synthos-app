@@ -9,9 +9,8 @@ const PASSWORD = process.env.NEXT_PUBLIC_PASSWORD || '';
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Agent endpoint - use different values based on environment
-const AGENT_ENDPOINT = isDevelopment
-  ? 'http://localhost:3000/ed9ddab6-6713-055c-bca6-3390aee6bf72/message' // Local testing URL
-  : process.env.NEXT_PUBLIC_AI_AGENT || '';
+const AGENT_ENDPOINT = process.env.NEXT_PUBLIC_AI_AGENT || '';
+
 
 interface AiAgentRequest {
   text: string;
