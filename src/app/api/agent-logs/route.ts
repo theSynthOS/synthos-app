@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Agent logs API endpoint
-const AGENT_LOGS_URL = process.env.NEXT_PUBLIC_AGENT_LOGS_URL;
+// Determine if we're in development mode
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+// Agent logs API endpoint - use different values based on environment
+const AGENT_LOGS_URL = isDevelopment 
+  ? 'http://localhost:3000/api/mock-logs' // Local testing URL
+  : process.env.NEXT_PUBLIC_AGENT_LOGS_URL;
+
 const AGENT_LOGS_TOKEN = process.env.NEXT_PUBLIC_AGENT_LOGS_TOKEN;
 
 // Clean the token by removing quotes and extra whitespace
@@ -72,6 +78,37 @@ function parseLogString(log: string) {
       message,
     };
   });
+}
+
+// Mock logs for development environment
+function getMockLogs() {
+  return [
+    {
+      id: '1',
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: 'This is a mock log entry for development',
+    },
+    {
+      id: '2',
+      timestamp: new Date(Date.now() - 5000).toISOString(),
+      level: 'debug',
+      message: 'Debug information for local testing',
+    },
+    {
+      id: '3',
+      timestamp: new Date(Date.now() - 10000).toISOString(),
+      level: 'warn',
+      message: 'Warning: This is using mock data',
+    },
+    {
+      id: '4',
+      timestamp: new Date(Date.now() - 15000).toISOString(),
+      level: 'error',
+      message: 'Example error log',
+      metadata: { details: 'Additional error context' },
+    },
+  ];
 }
 
 export async function GET(request: NextRequest) {
