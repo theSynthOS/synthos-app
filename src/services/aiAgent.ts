@@ -13,9 +13,6 @@ const AGENT_ENDPOINT = isDevelopment
   ? 'http://localhost:3000/ed9ddab6-6713-055c-bca6-3390aee6bf72/message' // Local testing URL
   : process.env.NEXT_PUBLIC_AI_AGENT || '';
 
-// AVS logs API endpoint
-const AVS_LOGS_API_ROUTE = '/api/avs-logs';
-
 interface AiAgentRequest {
   text: string;
 }
@@ -112,36 +109,13 @@ export async function fetchAgentLogs() {
   try {
     const response = await fetch('/api/agent-logs');
     if (!response.ok) {
-      throw new Error(`Error: ${response.status} ${response.statusText}`);
+      console.error(`Error fetching agent logs: ${response.status} - ${response.statusText}`);
+      return [];
     }
     const data = await response.json();
     return data.log || [];
   } catch (error) {
     console.error('Error fetching agent logs:', error);
-    throw error;
-  }
-}
-
-/**
- * Fetch AVS logs from the API
- * @returns Array of log entries
- */
-export async function fetchAVSLogs() {
-  // In development, return empty logs
-  if (isDevelopment) {
-    console.log('AVS logs not available in development mode');
     return [];
   }
-  
-  try {
-    const response = await fetch('/api/avs-logs');
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status} ${response.statusText}`);
-    }
-    const data = await response.json();
-    return data.log || [];
-  } catch (error) {
-    console.error('Error fetching AVS logs:', error);
-    throw error;
-  }
-} 
+}

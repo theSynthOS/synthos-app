@@ -3,20 +3,20 @@ import type { Metadata } from "next";
 import { ConnectButton, ThirdwebProvider } from "thirdweb/react";
 import "../styles/globals.css";
 import Header from "../components/header";
-import { Gluten, Titillium_Web } from "next/font/google";
+import { Gluten, Titillium_Web, Roboto_Mono, Space_Grotesk } from "next/font/google";
 import { wallets } from "./WalletProvider";
 import { createThirdwebClient } from "thirdweb";
 
-const gluten = Gluten({
+const roboto_mono = Roboto_Mono({
   subsets: ["latin"],
-  variable: "--font-gluten", // Optional: create a CSS variable for advanced use
-  weight: ["400", "700"], // Define the weights you need
+  variable: "--font-roboto",
+  weight: ["400", "700"],
 });
 
-const titilliumWeb = Titillium_Web({
+const space_grotesk = Space_Grotesk({
   subsets: ["latin"],
-  variable: "--font-titillium",
-  weight: ["400", "700"],
+  variable: "--font-space-grotesk",
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -35,12 +35,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${gluten.className}`}
+        className={`${space_grotesk.className}`}  // Use gluten font for the body
         style={{ backgroundColor: "#09092f", minWidth: "100vw" }}
       >
         <ThirdwebProvider>
           <Header />
-          <div className="w-full h-full px-[5%] text-yellow-500">
+          <div className="w-full h-full mx-2 overflow-y-hidden">
             {children}
           </div>
         </ThirdwebProvider>

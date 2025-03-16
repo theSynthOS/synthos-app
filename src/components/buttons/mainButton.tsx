@@ -60,7 +60,7 @@ export default function CustomButton({
           background: var(--bg);
           place-items: center;
           transition: 0.2s ease;
-          border: 2px solid black;
+          border: 2px solid yellow;
           border-radius: 9999px;
           translate: calc(
               (var(--active) * var(--coefficient, 0)) * (var(--step) * -1)
