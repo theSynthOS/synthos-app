@@ -18,8 +18,8 @@ const space_grotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Synth OS",
-  description: "A decentralized operating system for the future",
+  title: "Synth OS - Verifiable DeFAI Agent Marketplace on Scroll",
+  description: "Verifiable DeFAI Agent Marketplace on Scroll",
   icons: {
     icon: "/logo.jpeg",
   },
