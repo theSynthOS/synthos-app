@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { sendMessageToAgent, fetchAgentLogs, fetchAVSLogs } from "../services/aiAgent";
+import { sendMessageToAgent } from "../services/aiAgent";
 
 
 interface Message {
