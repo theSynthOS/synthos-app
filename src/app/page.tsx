@@ -36,6 +36,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"info" | "logs">("info");
   const [showModal, setShowModal] = useState(false);
   const [showComingSoonModal, setShowComingSoonModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [agentLogs, setAgentLogs] = useState<AgentLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
@@ -231,6 +232,14 @@ export default function Home() {
                         <span className="text-gray-400">Hash of past tx:</span>
                         <a href="#" className="ml-2 text-blue-400 hover:underline">{agentData.lastTxHash}</a>
                       </div>
+                      <div className="md:hidden mt-4">
+                        <CustomButton
+                          onClick={() => setShowChatModal(true)}
+                          className="w-full py-2"
+                        >
+                          Start Chat
+                        </CustomButton>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -277,8 +286,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right Panel - Chatbot */}
-            <div className="md:w-1/2 h-full">
+            {/* Right Panel - Chatbot (Desktop only) */}
+            <div className="hidden md:block md:w-1/2 h-full">
               <ChatbotCard 
                 agentId={agentData.id}
                 agentName={agentData.name}
@@ -289,31 +298,49 @@ export default function Home() {
         </Modal>
       )}
 
-      {/* Coming Soon Modal */}
-      {showComingSoonModal && (
+      {/* Mobile Chat Modal */}
+      {showChatModal && (
         <Modal
-          onClose={() => setShowComingSoonModal(false)}
-          title="Coming Soon"
+          onClose={() => setShowChatModal(false)}
+          title={`Chat with ${agentData.name}`}
         >
-          <div className="flex flex-col items-center justify-center h-full py-10">
-            <div className="bg-[#1a1a4a] p-8 rounded-lg text-center max-w-md">
-              <h2 className="text-2xl font-bold text-yellow-200 mb-4">Upcoming in V2</h2>
-              <p className="text-gray-200 mb-6">
-                We&apos;re working hard to bring you the ability to create and deploy your own agents.
-                This feature will be available in our next major release.
-              </p>
-              <p className="text-gray-300 mb-8">
-                Stay tuned for updates and be the first to know when it launches!
-              </p>
-              <CustomButton
-                onClick={() => setShowComingSoonModal(false)}
-                className="px-8 py-2"
-              >
-                Got it
-              </CustomButton>
-            </div>
+          <div className="h-[70vh]">
+            <ChatbotCard 
+              agentId={agentData.id}
+              agentName={agentData.name}
+              title={`Chat with ${agentData.name}`}
+            />
           </div>
         </Modal>
+      )}
+
+      {/* Coming Soon Modal */}
+      {showComingSoonModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowComingSoonModal(false)}></div>
+          <div className="bg-[#1a1a4a] p-8 rounded-lg text-center max-w-md relative z-10">
+            <button 
+              onClick={() => setShowComingSoonModal(false)}
+              className="absolute top-2 right-2 text-gray-400 hover:text-white"
+            >
+              ✕
+            </button>
+            <h2 className="text-2xl font-bold text-yellow-200 mb-4">Upcoming in V2</h2>
+            <p className="text-gray-200 mb-6">
+              We&apos;re working hard to bring you the ability to create and deploy your own agents.
+              This feature will be available in our next major release.
+            </p>
+            <p className="text-gray-300 mb-8">
+              Stay tuned for updates and be the first to know when it launches!
+            </p>
+            <CustomButton
+              onClick={() => setShowComingSoonModal(false)}
+              className="px-8 py-2"
+            >
+              Got it
+            </CustomButton>
+          </div>
+        </div>
       )}
     </main>
   );
