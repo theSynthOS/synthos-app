@@ -98,23 +98,43 @@ export async function sendMessageToAgent(message: string, agentId?: string) {
  * Fetch agent logs from the API
  * @returns Array of agent log entries
  */
-export async function fetchAgentLogs() {
-  // In development, return empty logs
-  if (isDevelopment) {
-    console.log('Agent logs not available in development mode');
-    return [];
-  }
-  
+export async function fetchAgentLogs(): Promise<AgentLogEntry[]> {
   try {
-    const response = await fetch('/api/agent-logs');
+    // Use the local API route
+    const url = `/api/agent-logs`;
+    console.log('Fetching AVS logs from:', url);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+    });
+    
+    console.log('AVS logs response status:', response.status);
+    
     if (!response.ok) {
-      console.error(`Error fetching agent logs: ${response.status} - ${response.statusText}`);
+      console.error(`Error fetching AVS logs: ${response.status} - ${response.statusText}`);
       return [];
     }
     const data = await response.json();
-    return data.log || [];
+    console.log('AVS logs data received:', data);
+    
+    // Check if data has the expected structure
+    if (data.log && Array.isArray(data.log)) {
+      return data.log;
+    }
+    
+    // Fallback for other response formats
+    if (Array.isArray(data)) {
+      return data;
+    }
+    
+    console.warn('Unexpected data format received from logs API:', data);
+    return [];
   } catch (error) {
-    console.error('Error fetching agent logs:', error);
+    console.error('Error fetching AVS logs:', error);
     return [];
   }
 }

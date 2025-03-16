@@ -7,11 +7,9 @@ import Modal from "../components/detailModal";
 import { motion } from "framer-motion";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
 import { getContract } from "thirdweb";
-import { scrollSepoliaTestnet } from "thirdweb/chains";
 import { useReadContract } from "thirdweb/react";
 import { scrollSepolia } from "@/client";
 import { client } from "@/client";
- 
 
 interface AgentLog {
   id: string;
@@ -48,19 +46,30 @@ export default function Home() {
 
   useEffect(() => {
     if (showModal) {
-      loadAgentLogs();
-    
+      // Initial load of logs
+      loadAVSLogs();
+      
+      // Set up polling for logs every 10 seconds when modal is open and logs tab is active
+      const refreshInterval = setInterval(() => {
+        if (activeTab === "logs") {
+          console.log("Polling AVS logs...");
+          loadAVSLogs(false);
+        }
+      }, 10000); // Poll every 10 seconds
+      
+      // Clean up interval when modal closes
+      return () => clearInterval(refreshInterval);
     }
   }, [showModal, activeTab]);
 
-  const loadAgentLogs = async (scrollToBottom = false) => {
+  const loadAVSLogs = async (scrollToBottom = false) => {
     setIsLoadingLogs(true);
     setLogError(null);
     
     try {
       const logs = await fetchAgentLogs();
       
-      console.log("Logs received:", logs);
+      console.log("AVS Logs received:", logs);
       
       if (logs && logs.length > 0) {
         // Sort logs by timestamp (newest first)
@@ -78,15 +87,36 @@ export default function Home() {
         }
       } else {
         setAgentLogs([]);
-        setLogError("No logs available for this agent");
+        setLogError("No AVS logs available");
       }
     } catch (error) {
-      console.error("Error loading agent logs:", error);
+      console.error("Error loading AVS logs:", error);
       setAgentLogs([]);
-      setLogError("Failed to load agent logs");
+      setLogError("Failed to load AVS logs");
     } finally {
       setIsLoadingLogs(false);
     }
+  };
+
+  // Handle new logs from SSE
+  const handleNewLogs = (newLogs: AgentLog[]) => {
+    console.log("New SSE logs received:", newLogs);
+    
+    setAgentLogs(prevLogs => {
+      // Combine new logs with existing logs
+      const combinedLogs = [...newLogs, ...prevLogs];
+      
+      // Sort logs by timestamp (newest first)
+      const sortedLogs = combinedLogs.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      
+      // Limit to 100 logs to prevent performance issues
+      return sortedLogs.slice(0, 100);
+    });
+    
+    // Clear any error message
+    setLogError(null);
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -139,6 +169,20 @@ export default function Home() {
       );
     }
     
+    // Handle JSON messages
+    if (log.message.startsWith('{') && log.message.endsWith('}')) {
+      try {
+        const jsonData = JSON.parse(log.message);
+        return (
+          <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
+            {JSON.stringify(jsonData, null, 2)}
+          </pre>
+        );
+      } catch (e) {
+        // Not valid JSON, continue with regular message
+      }
+    }
+    
     // Regular message
     return <p className="text-white text-sm whitespace-pre-wrap">{log.message}</p>;
   };
@@ -172,7 +216,7 @@ export default function Home() {
     id: "0", // Using the ID we queried with
     name: "AAVE Agent", // This could be derived from description or set manually
     description: agentDetails[6], // description
-    category: agentDetails[6],
+    category: "DeFi",
     creationDate: new Date().toISOString().split('T')[0], // Current date as fallback
     walletAddress: agentDetails[0], // owner address
     executionFees: (Number(agentDetails[1]) / 1e18) + " ETH", // Convert wei to ETH
@@ -273,7 +317,7 @@ export default function Home() {
             onClick={() => setShowComingSoonModal(true)}
           >
             <div className="text-center">
-              <h2 className="text-xl md:text-2xl font-bold text-gray-400 mb-1 md:mb-2 ">Add your</h2>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-400 mb-1 md:mb-2 ">Create Agent</h2>
               <p className="text-gray-500 text-sm md:text-base">Create a new agent</p>
             </div>
           </div>
@@ -301,7 +345,7 @@ export default function Home() {
                   className={`px-4 py-2 font-medium ${activeTab === "logs" ? "text-yellow-200 border-b-2 border-yellow-200" : "text-gray-400 hover:text-gray-200"}`}
                   onClick={() => setActiveTab("logs")}
                 >
-                  Agent Logs
+                  AVS Logs
                 </button>
               </div>
 
@@ -366,7 +410,7 @@ export default function Home() {
                 ) : (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-xl font-bold text-white">Agent Logs</h3>
+                      <h3 className="text-xl font-bold text-white">AVS Logs</h3>
                       <div className="flex space-x-2">
                         <button 
                           onClick={() => {
@@ -379,7 +423,7 @@ export default function Home() {
                           Scroll to Bottom
                         </button>
                         <button 
-                          onClick={() => loadAgentLogs(true)}
+                          onClick={() => loadAVSLogs(true)}
                           className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
                           disabled={isLoadingLogs}
                         >
@@ -398,7 +442,7 @@ export default function Home() {
                       </div>
                     ) : agentLogs.length === 0 ? (
                       <div className="text-center py-4">
-                        <p className="text-gray-400">No logs available</p>
+                        <p className="text-gray-400">No AVS logs available</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
