@@ -38,7 +38,7 @@ export default function RootLayout({
       >
         <ThirdwebProvider>
           <Header />
-          <div className="w-full h-full mx-2 ">
+          <div className="w-full h-full mx-2 overflow-y-hidden">
             {children}
           </div>
         </ThirdwebProvider>

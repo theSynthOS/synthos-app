@@ -9,9 +9,6 @@ const PASSWORD = process.env.NEXT_PUBLIC_PASSWORD || '';
 // Agent logs API endpoint - now using our local API route
 const AGENT_LOGS_API_ROUTE = '/api/agent-logs';
 
-// AVS logs API endpoint
-const AVS_LOGS_API_ROUTE = '/api/avs-logs';
-
 interface AiAgentRequest {
   text: string;
 }
@@ -111,9 +108,8 @@ export async function fetchAgentLogs(): Promise<AgentLogEntry[]> {
     console.log('Agent logs response status:', response.status);
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Error response from logs API:', errorText);
-      throw new Error(`Error fetching agent logs: ${response.status} - ${response.statusText}`);
+      console.error(`Error fetching agent logs: ${response.status} - ${response.statusText}`);
+      return [];
     }
     
     const data = await response.json();
@@ -133,52 +129,6 @@ export async function fetchAgentLogs(): Promise<AgentLogEntry[]> {
     return [];
   } catch (error) {
     console.error('Error fetching agent logs:', error);
-    throw error;
+    return [];
   }
 }
-
-/**
- * Fetch AVS logs from the API
- * @returns Array of log entries
- */
-export async function fetchAVSLogs(): Promise<AgentLogEntry[]> {
-  try {
-    const url = AVS_LOGS_API_ROUTE;
-    console.log('Fetching AVS logs from:', url);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store',
-    });
-    
-    console.log('AVS logs response status:', response.status);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Error response from AVS logs API:', errorText);
-      throw new Error(`Error fetching AVS logs: ${response.status} - ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    console.log('AVS logs data received:', data);
-    
-    // Check if data has the expected structure
-    if (data.log && Array.isArray(data.log)) {
-      return data.log;
-    }
-    
-    // Fallback for other response formats
-    if (Array.isArray(data)) {
-      return data;
-    }
-    
-    console.warn('Unexpected data format received from AVS logs API:', data);
-    return [];
-  } catch (error) {
-    console.error('Error fetching AVS logs:', error);
-    throw error;
-  }
-} 
