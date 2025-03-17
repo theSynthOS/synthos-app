@@ -34,6 +34,16 @@ interface AgentData {
   agentLocation?: string;
 }
 
+interface AVSPolicyData {
+  name: string;
+  description: string;
+  whenCondition: any;
+  howCondition: any;
+  whatCondition: any;
+  isActive: boolean;
+  creator: string;
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"info" | "logs">("info");
   const [showModal, setShowModal] = useState(false);
@@ -43,6 +53,7 @@ export default function Home() {
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const [showConditions, setShowConditions] = useState(false);
 
   useEffect(() => {
     if (showModal && activeTab === "logs") {
@@ -61,6 +72,90 @@ export default function Home() {
       };
     }
   }, [showModal, activeTab]);
+
+  // Contract read agent details
+  const contract = getContract({
+    client,
+    address: "0x6ed02Bf56bEB79D47F734eE6BB4701B9789b4D5b",
+    chain: scrollSepolia
+  })
+
+// Contract read AVS 
+const avsContract = getContract({
+  client,
+  address: "0xa7B0446a0Fa8e8c503774987931E071E3DdF271A",
+  chain: scrollSepolia
+})
+
+  // First get the agent hash by ID
+  const { data: agentHash, isLoading: isAgentHashLoading } = useReadContract({
+    contract,
+    method: "function getAgentHashById(uint256 agentId) returns (string)",
+    params: [BigInt(0)],
+  });
+
+  // Then use the hash to get agent details - use empty string if hash not available yet
+  const { data: agentDetails, isLoading: isAgentDetailsLoading } = useReadContract({
+    contract,
+    method: "function getAgent(string memory dockerfileHash) returns (address owner, uint256 executionFee, uint256[] memory policyIds, bool isRegistered, string memory agentDockerfileHash, string memory agentLocation, string memory description, uint8 category)",
+    params: [agentHash || ""],
+  });
+
+  // Log the agent details and policy ID for debugging
+  useEffect(() => {
+    if (agentDetails) {
+      console.log("Agent Details:", agentDetails);
+      console.log("Policy IDs:", agentDetails[2]);
+    }
+  }, [agentDetails]);
+
+  // Contract read AVS details - use the correct method signature
+  const { data: avsDetails, isLoading: isAVSLoading } = useReadContract({
+    contract: avsContract,
+    method: "getPolicyMetadata(uint256)",
+    params: [BigInt(1)]
+  });
+console.log("AVS Details:", avsDetails);
+
+  // Get the AVS policy data without fallbacks
+  const avsPolicyData: AVSPolicyData | null = avsDetails ? {
+    name: avsDetails[0] as string || "",
+    description: avsDetails[1] as string || "",
+    whenCondition: avsDetails[2] || "",
+    howCondition: avsDetails[3] || "",
+    whatCondition: avsDetails[4] || "",
+    isActive: avsDetails[5] as boolean || false,
+    creator: avsDetails[6] as string || ""
+  } : null;
+
+  // Extract agent data from contract if available
+  const contractAgentData: AgentData = agentDetails ? {
+    id: "0", // Using the ID we queried with
+    name: "AAVE Agent", // This could be derived from description or set manually
+    description: agentDetails[6], // description
+    category: "DeFi",
+    creationDate: new Date().toISOString().split('T')[0], // Current date as fallback
+    walletAddress: agentDetails[0], // owner address
+    executionFees: (Number(agentDetails[1]) / 1e18) + " ETH", // Convert wei to ETH
+    avsPlugin: avsPolicyData?.name || "", // Use AVS policy name if available
+    totalTxExecuted: "0", // Default value
+    lastTxHash: "", // Default value
+    agentLocation: agentDetails[5], // agentLocation
+    dockerfileHash: agentDetails[4], // agentDockerfileHash
+  } : {
+    id: "0",
+    name: "Loading...",
+    description: "Loading agent data...",
+    category: "Unknown",
+    creationDate: "",
+    walletAddress: "",
+    executionFees: "",
+    avsPlugin: "",
+    totalTxExecuted: "",
+    lastTxHash: "",
+    agentLocation: "",
+    dockerfileHash: "",
+  };
 
   // Setup SSE connection for real-time logs
   const setupLogStream = () => {
@@ -114,10 +209,7 @@ export default function Home() {
     setLogError(null);
     
     try {
-      console.log("Fetching AVS logs...");
       const logs = await fetchAgentLogs();
-      
-      console.log("AVS Logs received:", logs);
       
       if (logs && logs.length > 0) {
         // Sort logs by timestamp (newest first)
@@ -218,64 +310,12 @@ export default function Home() {
     return <p className="text-white text-sm whitespace-pre-wrap">{log.message}</p>;
   };
 
-  // Contract read
-  const contract = getContract({
-    client,
-    address: "0x6ed02Bf56bEB79D47F734eE6BB4701B9789b4D5b",
-    chain: scrollSepolia
-  })
-
-  // First get the agent hash by ID
-  const { data: agentHash, isLoading: isAgentHashLoading } = useReadContract({
-    contract,
-    method: "function getAgentHashById(uint256 agentId) returns (string)",
-    params: [BigInt(0)],
-  });
-
-  // Then use the hash to get agent details - use empty string if hash not available yet
-  const { data: agentDetails, isLoading: isAgentDetailsLoading } = useReadContract({
-    contract,
-    method: "function getAgent(string memory dockerfileHash) returns (address owner, uint256 executionFee, uint256[] memory policyIds, bool isRegistered, string memory agentDockerfileHash, string memory agentLocation, string memory description, uint8 category)",
-    params: [agentHash || ""],
-  });
-
-  // console.log("Agent Hash:", agentHash);
-  // console.log("Agent Details:", agentDetails);
-
-  // Extract agent data from contract if available
-  const contractAgentData: AgentData = agentDetails ? {
-    id: "0", // Using the ID we queried with
-    name: "AAVE Agent", // This could be derived from description or set manually
-    description: agentDetails[6], // description
-    category: "DeFi",
-    creationDate: new Date().toISOString().split('T')[0], // Current date as fallback
-    walletAddress: agentDetails[0], // owner address
-    executionFees: (Number(agentDetails[1]) / 1e18) + " ETH", // Convert wei to ETH
-    avsPlugin: "Scroll", // Default value
-    totalTxExecuted: "0", // Default value
-    lastTxHash: "", // Default value
-    agentLocation: agentDetails[5], // agentLocation
-    dockerfileHash: agentDetails[4], // agentDockerfileHash
-  } : {
-    id: "0",
-    name: "Loading...",
-    description: "Loading agent data...",
-    category: "Unknown",
-    creationDate: "",
-    walletAddress: "",
-    executionFees: "",
-    avsPlugin: "",
-    totalTxExecuted: "",
-    lastTxHash: "",
-    agentLocation: "",
-    dockerfileHash: ""
-  };
 
   // Use the real data
   const displayAgentData: AgentData = contractAgentData;
   
   // Loading state for agent data
-  const isLoadingAgentData = isAgentHashLoading || isAgentDetailsLoading;
+  const isLoadingAgentData = isAgentHashLoading || isAgentDetailsLoading || isAVSLoading;
 
   return (
     <main
@@ -406,15 +446,79 @@ export default function Home() {
                       </div>
                       <div>
                         <span className="text-gray-400">AVS Plugin:</span>
-                        <span className="ml-2 text-white">{displayAgentData.avsPlugin}</span>
+                        <span className="ml-2 text-white">{displayAgentData.avsPlugin || ""}</span>
                       </div>
+                      {avsPolicyData && (
+                        <>
+                          <div>
+                            <span className="text-gray-400">AVS Policy Description:</span>
+                            <span className="ml-2 text-white">{avsPolicyData.description}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">AVS Policy Status:</span>
+                            <span className={`ml-2 ${avsPolicyData.isActive ? "text-green-400" : "text-red-400"}`}>
+                              {avsPolicyData.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">AVS Policy Creator:</span>
+                            <a 
+                              href={`https://sepolia.scrollscan.dev/address/${avsPolicyData.creator}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="ml-2 text-blue-400 hover:underline break-all"
+                            >
+                              {avsPolicyData.creator}
+                            </a>
+                          </div>
+                          
+                          {/* Collapsible Conditions Section */}
+                          <div className="mt-4">
+                            <button 
+                              onClick={() => setShowConditions(!showConditions)}
+                              className="flex items-center text-yellow-400 hover:text-yellow-300 transition-colors"
+                            >
+                              <span className="mr-2">{showConditions ? '▼' : '►'}</span>
+                              <span>AVS Policy Conditions</span>
+                            </button>
+                            
+                            {showConditions && (
+                              <div className="mt-3 pl-4 border-l-2 border-gray-700 space-y-4">
+                                {/* When Condition */}
+                                <div>
+                                  <h4 className="text-yellow-200 font-medium mb-1">When Condition</h4>
+                                  <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
+                                    {JSON.stringify(avsPolicyData.whenCondition, null, 2) || "0.0"}
+                                  </pre>
+                                </div>
+                                
+                                {/* How Condition */}
+                                <div>
+                                  <h4 className="text-yellow-200 font-medium mb-1">How Condition</h4>
+                                  <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
+                                    {JSON.stringify(avsPolicyData.howCondition, null, 2)}
+                                  </pre>
+                                </div>
+                                
+                                {/* What Condition */}
+                                <div>
+                                  <h4 className="text-yellow-200 font-medium mb-1">What Condition</h4>
+                                  <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
+                                    {JSON.stringify(avsPolicyData.whatCondition, null, 2)}
+                                  </pre>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
                       <div>
                         <span className="text-gray-400">Total tx executed:</span>
                         <span className="ml-2 text-white">{displayAgentData.totalTxExecuted}</span>
                       </div>
                       <div>
                         <span className="text-gray-400">Hash of past tx:</span>
-                        <a href="#" className="ml-2 text-blue-400 hover:underline">{displayAgentData.lastTxHash}</a>
+                        <a href="#" className="ml-2 text-blue-400 hover:underline">{displayAgentData.lastTxHash || "No transactions yet"}</a>
                       </div>
                       {displayAgentData.dockerfileHash && (
                         <div>
@@ -491,8 +595,8 @@ export default function Home() {
                         ))}
                         <div ref={logsEndRef} />
                       </div>
-                    )}
-                  </div>
+                  )}
+                </div>
                 )}
               </div>
             </div>
