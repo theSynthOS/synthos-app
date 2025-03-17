@@ -4,8 +4,6 @@ import { ConnectButton, ThirdwebProvider } from "thirdweb/react";
 import "../styles/globals.css";
 import Header from "../components/header";
 import { Gluten, Titillium_Web, Roboto_Mono, Space_Grotesk } from "next/font/google";
-import { wallets } from "./WalletProvider";
-import { createThirdwebClient } from "thirdweb";
 
 const roboto_mono = Roboto_Mono({
   subsets: ["latin"],
@@ -20,7 +18,7 @@ const space_grotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Synth OS - Verifiable DeFAI Agent Marketplace on Scroll",
+  title: "SynthOS - Verifiable DeFAI Agent Marketplace on Scroll",
   description: "Verifiable DeFAI Agent Marketplace on Scroll",
   icons: {
     icon: "/logo.jpeg",

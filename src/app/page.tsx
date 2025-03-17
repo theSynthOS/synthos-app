@@ -10,6 +10,7 @@ import { getContract } from "thirdweb";
 import { useReadContract } from "thirdweb/react";
 import { scrollSepolia } from "@/client";
 import { client } from "@/client";
+import Card from "@/components/card/page";
 
 interface AgentLog {
   id: string;
@@ -117,7 +118,18 @@ const avsContract = getContract({
   });
 console.log("AVS Details:", avsDetails);
 
-  // Get the AVS policy data without fallbacks
+  // Mock AVS policy data to use when real data is not available
+  const mockAVSPolicyData: AVSPolicyData = {
+    name: "AAVE Complete AVS Plugin",
+    description: "This plugin allows for the supply, borrow, repay, withdraw and deposit actions to be done for the Scroll AAVE Market",
+    whenCondition: "0.0",
+    howCondition: "0x7b2270726f746f636f6c223a224141564522",
+    whatCondition: "0x7b2261637469766974696573223a5b227375707073796c79222c22626f72726f77222c227265706179222c2277697468647261772c2264657073697422225d7d",
+    isActive: true,
+    creator: "0x1234567890123456789012345678901234567890"
+  };
+
+  // Get the AVS policy data with fallback to mock data
   const avsPolicyData: AVSPolicyData | null = avsDetails ? {
     name: avsDetails[0] as string || "",
     description: avsDetails[1] as string || "",
@@ -126,7 +138,7 @@ console.log("AVS Details:", avsDetails);
     whatCondition: avsDetails[4] || "",
     isActive: avsDetails[5] as boolean || false,
     creator: avsDetails[6] as string || ""
-  } : null;
+  } : mockAVSPolicyData;
 
   // Extract agent data from contract if available
   const contractAgentData: AgentData = agentDetails ? {
@@ -367,16 +379,16 @@ console.log("AVS Details:", avsDetails);
               </div>
             ) : (
               <>
-                <h2 className="text-xl md:text-2xl font-bold text-white mb-2 md:mb-3">{displayAgentData.name}</h2>
-                <p className="text-gray-300 mb-3 md:mb-4 text-sm md:text-base">{displayAgentData.description}</p>
+                <h2 className="text-xl md:text-2xl font-bold text-yellow-300 mb-2 md:mb-3">{displayAgentData.name}</h2>
+                <p className="text-gray-200/90 mb-3 md:mb-4 text-sm md:text-base">{displayAgentData.description}</p>
                 
                 <div className="mb-3 md:mb-4 text-sm md:text-base">
-                  <span className="text-gray-400">Execution Fee:</span>
+                  <span className="text-yellow-200">Execution Fee:</span>
                   <span className="ml-2 text-white">{displayAgentData.executionFees}</span>
                 </div>
                 
-                <div className="text-xs md:text-sm text-gray-400 mt-2 md:mt-4">
-                  Powered by <a href="#" className="text-blue-400 hover:underline">Autonome</a>
+                <div className="text-xs md:text-sm text-yellow-200 mt-2 md:mt-4">
+                  Powered by:  <a href="#" className="text-white **:hover:underline">Autonome</a>
                 </div>
               </>
             )}
@@ -384,7 +396,7 @@ console.log("AVS Details:", avsDetails);
           
           {/* Add Your Agent Card */}
           <div 
-            className="bg-white/5 backdrop-blur-sm border border-dashed border-gray-700 rounded-lg p-4 md:p-6 flex items-center justify-center hover:border-green-500 transition-colors cursor-pointer"
+            className="bg-white/5 backdrop-blur-sm border border-dashed border-gray-700 rounded-lg p-4 md:p-6 flex items-center justify-center hover:border-yellow-500 transition-colors cursor-pointer"
             onClick={() => setShowComingSoonModal(true)}
           >
             <div className="text-center">
@@ -425,52 +437,52 @@ console.log("AVS Details:", avsDetails);
                 {activeTab === "info" ? (
                   <div className="space-y-4">
                     <h2 className="text-2xl font-bold text-white">{displayAgentData.name}</h2>
-                    <p className="text-gray-300">{displayAgentData.description}</p>
+                    <p className="text-white">{displayAgentData.description}</p>
                     
                     <div className="mt-6 space-y-3">
-                      <div>
-                        <span className="text-gray-400">Category:</span>
-                        <span className="ml-2 text-white">{displayAgentData.category}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Agent Creation Date:</span>
-                        <a href="#" className="ml-2 text-blue-400 hover:underline">{displayAgentData.creationDate}</a>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Wallet Address:</span>
-                        <span className="ml-2 text-white">{displayAgentData.walletAddress}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Execution Fees:</span>
-                        <span className="ml-2 text-white">{displayAgentData.executionFees}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">AVS Plugin:</span>
-                        <span className="ml-2 text-white">{displayAgentData.avsPlugin || ""}</span>
-                      </div>
+                      <Card className="bg-yellow-200">
+                        <span className="text-yellow-700 font-bold">Category:</span>
+                        <span className="ml-2 text-yellow-900">{displayAgentData.category}</span>
+                      </Card>
+                      <Card className="border border-dashed border-yellow-200">
+                        <span className="text-white font-bold">Agent Creation Date:</span>
+                        <a href="#" className="ml-2 text-yellow-200">{displayAgentData.creationDate}</a>
+                      </Card>
+                      <Card className="border border-dashed border-yellow-200">
+                        <span className="text-white font-bold">Wallet Address:</span>
+                        <pre className="ml-2 text-yellow-200">{displayAgentData.walletAddress}</pre>
+                      </Card>
+                      <Card className="border border-dashed border-yellow-200">
+                        <span className="text-white font-bold">Execution Fees:</span>
+                        <span className="ml-2 text-yellow-200">{displayAgentData.executionFees}</span>
+                      </Card>
+                      <Card className="bg-yellow-200">
+                        <span className="text-yellow-600 font-bold">AVS Plugin:</span>
+                        <span className="ml-2 text-yellow-900">{displayAgentData.avsPlugin || ""}</span>
+                      </Card>
                       {avsPolicyData && (
                         <>
-                          <div>
-                            <span className="text-gray-400">AVS Policy Description:</span>
-                            <span className="ml-2 text-white">{avsPolicyData.description}</span>
-                          </div>
-                          <div>
+                          <Card className="border border-dashed border-yellow-200">
+                            <span className="text-white font-bold">AVS Policy Description:</span>
+                            <span className="ml-2 text-yellow-200">{avsPolicyData.description}</span>
+                          </Card>
+                          <Card className="border border-dashed border-yellow-200">
                             <span className="text-gray-400">AVS Policy Status:</span>
                             <span className={`ml-2 ${avsPolicyData.isActive ? "text-green-400" : "text-red-400"}`}>
                               {avsPolicyData.isActive ? "Active" : "Inactive"}
                             </span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">AVS Policy Creator:</span>
+                          </Card>
+                          <Card className="border border-dashed border-yellow-200">
+                            <span className="text-white font-bold">AVS Policy Creator:</span>
                             <a 
                               href={`https://sepolia.scrollscan.dev/address/${avsPolicyData.creator}`} 
                               target="_blank" 
                               rel="noopener noreferrer" 
-                              className="ml-2 text-blue-400 hover:underline break-all"
+                              className="ml-2 text-yellow-200 hover:underline break-all"
                             >
                               {avsPolicyData.creator}
                             </a>
-                          </div>
+                          </Card>
                           
                           {/* Collapsible Conditions Section */}
                           <div className="mt-4">
@@ -512,25 +524,25 @@ console.log("AVS Details:", avsDetails);
                           </div>
                         </>
                       )}
-                      <div>
-                        <span className="text-gray-400">Total tx executed:</span>
-                        <span className="ml-2 text-white">{displayAgentData.totalTxExecuted}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Hash of past tx:</span>
+                      <Card className="border border-dashed border-yellow-200">
+                        <span className="text-white font-bold">Total tx executed:</span>
+                        <span className="ml-2 text-yellow-200">{displayAgentData.totalTxExecuted}</span>
+                      </Card>
+                      <Card className="border border-dashed border-yellow-200">
+                        <span className="text-white">Hash of past tx:</span>
                         <a href="#" className="ml-2 text-blue-400 hover:underline">{displayAgentData.lastTxHash || "No transactions yet"}</a>
-                      </div>
+                      </Card>
                       {displayAgentData.dockerfileHash && (
-                        <div>
-                          <span className="text-gray-400">Dockerfile Hash:</span>
-                          <span className="ml-2 text-white break-all">{displayAgentData.dockerfileHash}</span>
-                        </div>
+                        <Card className="border border-dashed border-yellow-200">
+                          <span className="text-white font-bold">Dockerfile Hash:</span>
+                          <span className="ml-2 text-yellow-200 break-all">{displayAgentData.dockerfileHash}</span>
+                        </Card>
                       )}
                       {displayAgentData.agentLocation && (
-                        <div>
-                          <span className="text-gray-400">Agent Location:</span>
-                          <a href={displayAgentData.agentLocation} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-400 hover:underline break-all">{displayAgentData.agentLocation}</a>
-                        </div>
+                        <Card className="border border-dashed border-yellow-200">
+                          <span className="text-white">Agent Location:</span>
+                          <a href={displayAgentData.agentLocation} target="_blank" rel="noopener noreferrer" className="ml-2 text-yellow-200 hover:underline break-all">{displayAgentData.agentLocation}</a>
+                        </Card>
                       )}
                       <div className="md:hidden mt-4">
                         <CustomButton
