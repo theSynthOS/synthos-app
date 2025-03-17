@@ -193,7 +193,7 @@ console.log("AVS Details:", avsDetails);
     category: "DeFi",
     creationDate: new Date().toISOString().split('T')[0], // Current date as fallback
     walletAddress: agentDetails[0], // owner address
-    executionFees: (Number(agentDetails[1]) / 1e18) + " ETH", // Convert wei to ETH
+    executionFees: agentDetails[1], // This is already a bigint
     avsPlugin: avsPolicyData?.name || "", // Use AVS policy name if available
     totalTxExecuted: "0", // Default value
     lastTxHash: "", // Default value
@@ -206,7 +206,7 @@ console.log("AVS Details:", avsDetails);
     category: "Unknown",
     creationDate: "",
     walletAddress: "",
-    executionFees: "",
+    executionFees: BigInt(0),
     avsPlugin: "",
     totalTxExecuted: "",
     lastTxHash: "",
@@ -374,65 +374,11 @@ console.log("AVS Details:", avsDetails);
     );
   };
 
-  // Contract read
-  const contract = getContract({
-    client,
-    address: "0x6ed02Bf56bEB79D47F734eE6BB4701B9789b4D5b",
-    chain: scrollSepolia,
-  });
-
-  // First get the agent hash by ID
-  const { data: agentHash, isLoading: isAgentHashLoading } = useReadContract({
-    contract,
-    method: "function getAgentHashById(uint256 agentId) returns (string)",
-    params: [BigInt(0)],
-  });
-
-  // Then use the hash to get agent details - use empty string if hash not available yet
-  const { data: agentDetails, isLoading: isAgentDetailsLoading } =
-    useReadContract({
-      contract,
-      method:
-        "function getAgent(string memory dockerfileHash) returns (address owner, uint256 executionFee, uint256[] memory policyIds, bool isRegistered, string memory agentDockerfileHash, string memory agentLocation, string memory description, uint8 category)",
-      params: [agentHash || ""],
-    });
-
-  // Extract agent data from contract if available
-  const contractAgentData: AgentData = agentDetails
-    ? {
-        id: "0", // Using the ID we queried with
-        name: "AAVE Agent", // This could be derived from description or set manually
-        description: agentDetails[6], // description
-        category: "DeFi",
-        creationDate: new Date().toISOString().split("T")[0], // Current date as fallback
-        walletAddress: agentDetails[0], // owner address
-        executionFees: agentDetails[1],
-        avsPlugin: "Scroll", // Default value
-        totalTxExecuted: "0", // Default value
-        lastTxHash: "", // Default value
-        agentLocation: agentDetails[5], // agentLocation
-        dockerfileHash: agentDetails[4], // agentDockerfileHash
-      }
-    : {
-        id: "0",
-        name: "Loading...",
-        description: "Loading agent data...",
-        category: "Unknown",
-        creationDate: "",
-        walletAddress: "",
-        executionFees: BigInt(0),
-        avsPlugin: "",
-        totalTxExecuted: "",
-        lastTxHash: "",
-        agentLocation: "",
-        dockerfileHash: "",
-      };
-
   // Use the real data
   const displayAgentData: AgentData = contractAgentData;
-
+  
   // Loading state for agent data
-  const isLoadingAgentData = isAgentHashLoading || isAgentDetailsLoading;
+  const isLoadingAgentData = isAgentHashLoading || isAgentDetailsLoading || isAVSLoading;
 
   // If not authenticated, show sign-in prompt
   if (!isAuthenticated) {
@@ -446,11 +392,11 @@ console.log("AVS Details:", avsDetails);
           <h1 className="text-2xl md:text-4xl font-bold mb-6 text-yellow-500">
             Scroll&apos;s #1 Verifiable DeFAI Agent Marketplace
           </h1>
-          <p className="text-yellow-200 text-lg">
+          <div className="text-yellow-200 text-lg">
             <div className="animate-pulse bg-yellow-500/20 rounded-lg px-4 py-2 inline-block">
               Sign in to get started<span className="ml-2">🤖</span>
             </div>
-          </p>
+          </div>
         </div>
       </main>
     );
@@ -655,9 +601,6 @@ console.log("AVS Details:", avsDetails);
               <div className="flex-1 overflow-auto">
                 {activeTab === "info" ? (
                   <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-white">{displayAgentData.name}</h2>
-                    <p className="text-white">{displayAgentData.description}</p>
-                    
                     <h2 className="text-2xl font-bold text-white">
                       {displayAgentData.name}
                     </h2>

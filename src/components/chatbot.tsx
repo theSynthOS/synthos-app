@@ -384,11 +384,6 @@ export default function Chatbot({
       // Process the response (which is now always an array of items)
       if (Array.isArray(response)) {
         response.forEach((item) => {
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log("GOES HEREEEEE");
-        response.map((item: any) => {
-          console.log("item: ", item);
           const assistantMessage: Message = {
             role: "assistant",
             content: item.text,
@@ -408,14 +403,11 @@ export default function Chatbot({
             setIsChatEnded(true);
           }
         });
-        })
       } else {
         console.log("GOES HERE ELSE");
         const assistantMessage: Message = {
           role: "assistant",
-          content:
-            "Sorry, I received an unexpected response format. Please try again.",
-          content: response.response,
+          content: response.response || "Sorry, I received an unexpected response format. Please try again.",
           timestamp: new Date(),
           metadata: response.metadata,
         };
@@ -560,68 +552,21 @@ Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
         // Process the response (which is now always an array of items)
         if (Array.isArray(response)) {
           response.forEach((item) => {
-      .then(response => {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("GOES HEREEEEE");
-          response.map((item: any) => {
-            console.log("item: ", item);
             const assistantMessage: Message = {
               role: "assistant",
               content: item.text,
               timestamp: new Date(),
-              metadata: {
-                user: item.user,
-                action: item.action,
-              },
             };
             setMessages((prev) => [...prev, assistantMessage]);
-
-            // Generate new suggested questions based on the response content
-            setSuggestedQuestions(generateFollowUpQuestions(item.text));
-
-            // Check if the chat should end
-            if (item.action === "END") {
-              setIsChatEnded(true);
-            }
           });
-          })
-        } else {
-          console.log("GOES HERE ELSE");
-          const assistantMessage: Message = {
-            role: "assistant",
-            content:
-              "Sorry, I received an unexpected response format. Please try again.",
-            content: response.response,
-            timestamp: new Date(),
-            metadata: response.metadata,
-          };
-          setMessages((prev) => [...prev, assistantMessage]);
-          
-          // Generate new suggested questions based on the response content
-          // Use metadata.suggestedQuestions if available, otherwise generate them
-          if (response.metadata?.suggestedQuestions) {
-            setSuggestedQuestions(response.metadata.suggestedQuestions);
-          } else {
-            setSuggestedQuestions(generateFollowUpQuestions(response.response));
-          }
+        } else if (process.env.NODE_ENV === 'development') {
+          console.log("GOES HEREEEEE");
+          console.log("Unexpected response format:", response);
         }
-        
-        // Check if the chat should end
-        if (response.metadata?.action === "END") {
-          setIsChatEnded(true);
-        }
+        setIsLoading(false);
       })
       .catch((error) => {
         console.error("Error sending message:", error);
-        const errorMessage: Message = {
-          role: "assistant",
-          content:
-            "Sorry, there was an error processing your request. Please try again later.",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, errorMessage]);
-      })
-      .finally(() => {
         setIsLoading(false);
       });
   };
@@ -645,7 +590,7 @@ Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
                     : "bg-[#1a1a4a] text-white"
                 }`}
               >
-                <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
                 <div className="text-xs mt-1 opacity-70 text-right">
                   {new Date(msg.timestamp).toLocaleTimeString()}
                 </div>
@@ -678,9 +623,9 @@ Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
           messages.length > 0 &&
           messages[messages.length - 1].role === "assistant" && (
             <div className="px-4 pb-3">
-              <p className="text-yellow-200 text-sm mb-2">
+              <div className="text-yellow-200 text-sm mb-2">
                 You might want to ask:
-              </p>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {suggestedQuestions.map((question, index) => (
                   <button
