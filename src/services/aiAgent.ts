@@ -73,7 +73,7 @@ export async function sendMessageToAgent(message: string, agentId?: string) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-       message: message,
+       text: message,
        agentId: agentId,
       }),
     });
