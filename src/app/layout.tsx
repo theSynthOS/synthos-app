@@ -18,8 +18,8 @@ const space_grotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "SynthOS - Verifiable DeFAI Agent Marketplace on Scroll",
-  description: "Verifiable DeFAI Agent Marketplace on Scroll",
+  title: "SynthOS - Scroll's #1 Verifiable DeFAI Agent Marketplace",
+  description: "Scroll's #1 Verifiable DeFAI Agent Marketplace",
   icons: {
     icon: "/logo.jpeg",
   },

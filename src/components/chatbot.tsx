@@ -2,7 +2,24 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { sendMessageToAgent } from "../services/aiAgent";
-
+import {
+  useSendTransaction,
+  useReadContract,
+  useActiveAccount,
+  useWalletBalance,
+  useSendBatchTransaction,
+} from "thirdweb/react";
+import {
+  prepareTransaction,
+  getContract,
+  prepareContractCall,
+  sendTransaction,
+} from "thirdweb";
+import { client, scrollSepolia } from "@/client";
+import { toast } from "react-toastify";
+import { taskRegistryAbi } from "@/utils/abi/taskRegistryABI";
+import { Abi } from "thirdweb/utils";
+import { Account } from "thirdweb/wallets";
 
 interface Message {
   role: "user" | "assistant";
@@ -25,13 +42,24 @@ interface AgentLog {
 interface ChatbotProps {
   agentId?: string;
   agentName?: string;
+  executionFees?: bigint;
+  creatorAddress?: string;
   height?: string;
 }
 
-export default function Chatbot({ 
-  agentId, 
+interface TaskResult {
+  from: string;
+  to: string;
+  callData: `0x${string}`;
+  timestamp: bigint;
+}
+
+export default function Chatbot({
+  agentId,
   agentName = "AI Assistant",
-  height = "100%" 
+  executionFees = BigInt(0),
+  creatorAddress = "",
+  height = "100%",
 }: ChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [agentLogs, setAgentLogs] = useState<AgentLog[]>([]);
@@ -43,14 +71,121 @@ export default function Chatbot({
   const [isLoadingAVSLogs, setIsLoadingAVSLogs] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
   const [avsLogError, setAVSLogError] = useState<string | null>(null);
+  const [isExecutingTx, setIsExecutingTx] = useState(false);
+  const [currentTxUUID, setCurrentTxUUID] = useState<string | null>(null);
+  const [isPreparingTx, setIsPreparingTx] = useState(false);
+  const [isTxSent, setIsTxSent] = useState(false);
+  const [hasShownTxSuccess, setHasShownTxSuccess] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const avsLogsEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const account = useActiveAccount();
+  const walletBalance = useWalletBalance({
+    address: account?.address,
+    chain: scrollSepolia,
+    client,
+  });
+
+  const TRANSACTION_VALUE = BigInt("1000000000000000"); // 0.005 ETH
+
+  const hasEnoughBalance = () => {
+    if (!walletBalance?.data?.value || !executionFees) return false;
+    const requiredAmount = TRANSACTION_VALUE + executionFees;
+    return walletBalance.data.value >= requiredAmount;
+  };
+
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
-    "Hey, I have $1000 and I would like to invest. What's the best recommendation for me?",
+    "Hey, I have " +
+      walletBalance?.data?.displayValue.toString() +
+      " " +
+      walletBalance?.data?.symbol.toString() +
+      " and I would like to invest. What's the best recommendation for me?",
     "Based on my smart wallet balance, whats the best investment for me?",
   ]);
+
+  // Add contract addresses at the top
+  const TASK_REGISTRY_ADDRESS = "0x8eab19f680afCFD21f0d42353E06C85F3359024C";
+  const POLICY_COORDINATOR_ADDRESS =
+    "0x2e22Bc79b58117015bF458045488E09aaa0bB794";
+
+  // Initialize contracts
+  const taskRegistry = getContract({
+    client,
+    address: TASK_REGISTRY_ADDRESS,
+    chain: scrollSepolia,
+    abi: taskRegistryAbi as Abi,
+  });
+
+  const policyCoordinator = getContract({
+    client,
+    address: POLICY_COORDINATOR_ADDRESS,
+    chain: scrollSepolia,
+  });
+
+  const { mutate: sendBatchTransaction, data: batchTxData } =
+    useSendBatchTransaction();
+
+  // Watch for transaction hash in batchTxData
+  useEffect(() => {
+    if (batchTxData?.transactionHash && !isTxSent && !hasShownTxSuccess) {
+      //wait 3 seconds
+      setTimeout(() => {
+        // Update message with transaction hash
+        const txMessage: Message = {
+          role: "assistant",
+          content: `Transaction submitted successfully!\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
+            TRANSACTION_VALUE
+          )}\nExecution Fee: ${formatWeiToEth(
+            executionFees
+          )}\n\nCheck at ScrollScan: https://sepolia.scrollscan.com/tx/${
+            batchTxData.transactionHash
+          }`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev.slice(0, -1), txMessage]);
+
+        batchTxData.maxBlocksWaitTime;
+        // Open explorer in new tab
+        window.open(
+          `https://sepolia.scrollscan.com/tx/${batchTxData.transactionHash}`,
+          "_blank"
+        );
+
+        //enable the button by removing the disabled attribute
+        document
+          .getElementById("send-message-input")
+          ?.removeAttribute("disabled");
+      }, 5000);
+
+      // Mark that we've shown the success message
+      setHasShownTxSuccess(true);
+    }
+  }, [batchTxData, isTxSent, hasShownTxSuccess]);
+
+  // Reset hasShownTxSuccess when starting a new transaction
+  useEffect(() => {
+    if (isPreparingTx) {
+      setHasShownTxSuccess(false);
+    }
+  }, [isPreparingTx]);
+
+  // Get task details using useReadContract
+  //@ts-ignore
+  const { data: taskDetails, isLoading: isTaskLoading } = useReadContract({
+    contract: taskRegistry,
+    method: "getTask",
+    params: [currentTxUUID as `0x${string}`],
+  }) as { data: TaskResult | undefined; isLoading: boolean };
+
+  // Check policy approval using useReadContract
+  const { data: isPolicyApproved, isLoading: isPolicyLoading } =
+    useReadContract({
+      contract: policyCoordinator,
+      method:
+        "function getValidationStatus(bytes32 taskUuid) returns (string memory status, string memory reason)",
+      params: [currentTxUUID as `0x${string}`],
+    });
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -78,7 +213,11 @@ export default function Chatbot({
     }
   }, [agentName, messages.length]);
 
- 
+  // Update currentTxUUID whenever messages change
+  useEffect(() => {
+    const txUUID = getLastAgentTxUUID();
+    setCurrentTxUUID(txUUID);
+  }, [messages]);
 
   // Function to generate contextual follow-up questions based on agent's response
   const generateFollowUpQuestions = (agentMessage: string): string[] => {
@@ -86,19 +225,24 @@ export default function Chatbot({
     const defaultQuestions = [
       "Can you explain more about the risks involved?",
       "What are the potential returns?",
-      "How long should I hold this investment?"
+      "How long should I hold this investment?",
     ];
-    
+
     // Check for specific contexts in the agent's message and provide relevant follow-ups
-    if (agentMessage.includes("I'd be happy to help you with an investment plan for Aave. Could you please tell me which asset you're interested in (WBTC, USDC, DAI, etc.) and how much you're planning to invest?") || agentMessage.includes("which asset")) {
+    if (
+      agentMessage.includes(
+        "I'd be happy to help you with an investment plan for Aave. Could you please tell me which asset you're interested in (WBTC, USDC, DAI, etc.) and how much you're planning to invest?"
+      ) ||
+      agentMessage.includes("which asset")
+    ) {
       return [
         "I prefer something that is low risk",
         "What's the best option for high returns?",
         "I'm interested in USDC",
-        "Tell me more about WBTC"
+        "Tell me more about WBTC",
       ];
     }
-    
+
     if (agentMessage.includes("risk")) {
       return [
         "I prefer low-risk investments",
@@ -106,16 +250,125 @@ export default function Chatbot({
         "I'm looking for high-risk, high-reward options",
       ];
     }
-    
-    
+
     return defaultQuestions;
   };
 
+  // Function to check if message contains a transaction UUID
+  const extractTxUUID = (message: string) => {
+    // Looking for format like: txUUID: 0x53594e544484f53000000000000000000000000000000000000000000000000
+    const match = message.match(/txUUID:\s*(0x[a-fA-F0-9]{64})/);
+    return match ? match[1] : null;
+  };
+
+  // Function to check if there's a transaction UUID in the last agent message
+  const getLastAgentTxUUID = () => {
+    if (messages.length === 0) return null;
+    const lastAgentMessage = [...messages]
+      .reverse()
+      .find((msg) => msg.role === "assistant");
+    return lastAgentMessage ? extractTxUUID(lastAgentMessage.content) : null;
+  };
+
+  // Function to handle transaction execution
+  const handleTransactionExecution = async () => {
+    if (!hasEnoughBalance()) {
+      const requiredAmount = formatWeiToEth(TRANSACTION_VALUE + executionFees);
+      const errorMessage: Message = {
+        role: "assistant",
+        content: `Insufficient balance. You need at least ${requiredAmount} to cover both the transaction value and execution fee.`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      return;
+    }
+
+    if (!creatorAddress) {
+      const errorMessage: Message = {
+        role: "assistant",
+        content: "Creator address not found. Cannot send execution fee.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      return;
+    }
+
+    setIsExecutingTx(true);
+    setIsPreparingTx(true);
+    try {
+      // Check if we have valid task details and policy approval
+      if (!taskDetails || !isPolicyApproved) {
+        throw new Error(
+          !taskDetails
+            ? "Task not found or invalid task details"
+            : "Task not approved by policy"
+        );
+      }
+
+      // Prepare both transactions
+      const transactions = [
+        prepareTransaction({
+          to: taskDetails.to,
+          data: taskDetails.callData as `0x${string}`,
+          chain: scrollSepolia,
+          client: client,
+          value: TRANSACTION_VALUE,
+        }),
+        prepareTransaction({
+          to: creatorAddress as `0x${string}`,
+          chain: scrollSepolia,
+          client: client,
+          value: executionFees,
+        }),
+      ];
+
+      setIsPreparingTx(false);
+      setIsTxSent(true);
+
+      // Add processing message first
+      const processingMessage: Message = {
+        role: "assistant",
+        content: `Processing transaction...\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
+          TRANSACTION_VALUE
+        )}\nExecution Fee: ${formatWeiToEth(executionFees)}`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, processingMessage]);
+      //disable the button
+      document
+        .getElementById("send-message-input")
+        ?.setAttribute("disabled", "true");
+
+      // Send batch transaction
+      await sendBatchTransaction(transactions);
+    } catch (error) {
+      console.error("Transaction error:", error);
+      const errorMessage: Message = {
+        role: "assistant",
+        content: `Transaction failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsExecutingTx(false);
+      setIsPreparingTx(false);
+      setIsTxSent(false);
+    }
+  };
+
+  // Modify the handleSendMessage function
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isChatEnded) return;
 
-    // Add user message
+    // Check if there's a pending transaction to execute
+    if (currentTxUUID && input.trim().toLowerCase() === "execute") {
+      await handleTransactionExecution();
+      return;
+    }
+
     const userMessage: Message = {
       role: "user",
       content: input,
@@ -126,28 +379,35 @@ export default function Chatbot({
     setIsLoading(true);
 
     try {
-      // Call the AI agent service
+      // Regular chat message handling...
       const response = await sendMessageToAgent(input, agentId);
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log("GOES HEREEEEE");
-        response.map((item: any) => {
-          console.log("item: ", item);
+      // Process the response (which is now always an array of items)
+      if (Array.isArray(response)) {
+        response.forEach((item) => {
           const assistantMessage: Message = {
             role: "assistant",
             content: item.text,
             timestamp: new Date(),
+            metadata: {
+              user: item.user,
+              action: item.action,
+            },
           };
           setMessages((prev) => [...prev, assistantMessage]);
-          
+
           // Generate new suggested questions based on the response content
           setSuggestedQuestions(generateFollowUpQuestions(item.text));
-        })
+
+          // Check if the chat should end
+          if (item.action === "END") {
+            setIsChatEnded(true);
+          }
+        });
       } else {
         console.log("GOES HERE ELSE");
         const assistantMessage: Message = {
           role: "assistant",
-          content: response.response,
+          content: response.response || "Sorry, I received an unexpected response format. Please try again.",
           timestamp: new Date(),
           metadata: response.metadata,
         };
@@ -167,10 +427,10 @@ export default function Chatbot({
         setIsChatEnded(true);
       }
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("Error:", error);
       const errorMessage: Message = {
         role: "assistant",
-        content: "Sorry, there was an error processing your request. Please try again later.",
+        content: "Sorry, there was an error processing your request.",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -179,72 +439,89 @@ export default function Chatbot({
     }
   };
 
-  // Function to handle clicking a suggested question
-  const handleSuggestedQuestion = (question: string) => {
-    if (isChatEnded) return;
-    
-    // Add user message
-    const userMessage: Message = {
-      role: "user",
-      content: question,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
+  const formatWeiToEth = (wei: bigint): string => {
+    return (Number(wei) / 1e18).toFixed(3) + " ETH";
+  };
 
-    // Process the question just like a normal message
-    sendMessageToAgent(question, agentId)
-      .then(response => {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("GOES HEREEEEE");
-          response.map((item: any) => {
-            console.log("item: ", item);
-            const assistantMessage: Message = {
-              role: "assistant",
-              content: item.text,
-              timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, assistantMessage]);
-            
-            // Generate new suggested questions based on the response content
-            setSuggestedQuestions(generateFollowUpQuestions(item.text));
-          })
-        } else {
-          console.log("GOES HERE ELSE");
-          const assistantMessage: Message = {
-            role: "assistant",
-            content: response.response,
-            timestamp: new Date(),
-            metadata: response.metadata,
-          };
-          setMessages((prev) => [...prev, assistantMessage]);
-          
-          // Generate new suggested questions based on the response content
-          // Use metadata.suggestedQuestions if available, otherwise generate them
-          if (response.metadata?.suggestedQuestions) {
-            setSuggestedQuestions(response.metadata.suggestedQuestions);
-          } else {
-            setSuggestedQuestions(generateFollowUpQuestions(response.response));
-          }
-        }
-        
-        // Check if the chat should end
-        if (response.metadata?.action === "END") {
-          setIsChatEnded(true);
-        }
-      })
-      .catch(error => {
-        console.error("Error sending message:", error);
-        const errorMessage: Message = {
-          role: "assistant",
-          content: "Sorry, there was an error processing your request. Please try again later.",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, errorMessage]);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+  // Function to render the send/execute button with appropriate styling
+  const renderExecuteButton = () => {
+    if (!hasEnoughBalance()) {
+      const tooltipText = `Required: ${formatWeiToEth(
+        TRANSACTION_VALUE + executionFees
+      )}
+Transaction Value: ${formatWeiToEth(TRANSACTION_VALUE)}
+Execution Fee: ${formatWeiToEth(executionFees)}
+Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
+        walletBalance?.data?.symbol || "ETH"
+      }`;
+
+      return (
+        <button
+          disabled
+          className="min-w-[140px] bg-red-500/90 backdrop-blur-sm text-white font-medium rounded-xl px-4 py-2 
+          transition-all duration-200 h-[44px] opacity-75 flex items-center justify-center gap-2 
+          border border-red-400/20"
+          title={tooltipText}
+        >
+          Insufficient Balance
+        </button>
+      );
+    }
+
+    if (isTaskLoading || isPolicyLoading) {
+      return (
+        <button
+          disabled
+          className="min-w-[140px] bg-green-500/90 backdrop-blur-sm text-white font-medium rounded-xl px-4 py-2 
+          transition-all duration-200 h-[44px] opacity-75 flex items-center justify-center gap-2 
+          border border-green-400/20"
+        >
+          <span className="animate-spin">⟳</span>
+          Validating Task...
+        </button>
+      );
+    }
+
+    if (isPreparingTx) {
+      return (
+        <button
+          disabled
+          className="min-w-[140px] bg-green-500/90 backdrop-blur-sm text-white font-medium rounded-xl px-4 py-2 
+          transition-all duration-200 h-[44px] opacity-75 flex items-center justify-center gap-2 
+          border border-green-400/20"
+        >
+          <span className="animate-spin">⟳</span>
+          Preparing Transaction...
+        </button>
+      );
+    }
+
+    if (isTxSent) {
+      return (
+        <button
+          disabled
+          className="min-w-[140px] bg-green-500/90 backdrop-blur-sm text-white font-medium rounded-xl px-4 py-2 
+          transition-all duration-200 h-[44px] opacity-75 flex items-center justify-center gap-2 
+          border border-green-400/20"
+        >
+          <span className="animate-spin">⟳</span>
+          Sending Transaction...
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="submit"
+        onClick={() => handleTransactionExecution()}
+        className="min-w-[140px] bg-green-500/90 backdrop-blur-sm text-white font-medium rounded-xl 
+        px-4 py-2 transition-all duration-200 h-[44px] flex items-center justify-center gap-2
+        hover:bg-green-500 border border-green-400/20 disabled:opacity-50 disabled:hover:bg-green-500/90"
+        disabled={isLoading || isChatEnded}
+      >
+        Execute
+      </button>
+    );
   };
 
   // Format timestamp for display
@@ -256,102 +533,162 @@ export default function Chatbot({
     }
   };
 
+  // Function to handle clicking a suggested question
+  const handleSuggestedQuestion = (question: string) => {
+    if (isChatEnded) return;
 
-    return (
-      <div style={{ height }} className="flex flex-col">
-        {/* Content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((msg, index) => (
+    // Add user message
+    const userMessage: Message = {
+      role: "user",
+      content: question,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
+
+    // Process the question just like a normal message
+    sendMessageToAgent(question, agentId)
+      .then((response) => {
+        // Process the response (which is now always an array of items)
+        if (Array.isArray(response)) {
+          response.forEach((item) => {
+            const assistantMessage: Message = {
+              role: "assistant",
+              content: item.text,
+              timestamp: new Date(),
+            };
+            setMessages((prev) => [...prev, assistantMessage]);
+          });
+        } else if (process.env.NODE_ENV === 'development') {
+          console.log("GOES HEREEEEE");
+          console.log("Unexpected response format:", response);
+        }
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        console.error("Error sending message:", error);
+        setIsLoading(false);
+      });
+  };
+
+  return (
+    <div style={{ height }} className="flex flex-col">
+      {/* Content */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((msg, index) => (
+            <div
+              key={index}
+              className={`flex ${
+                msg.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
               <div
-                key={index}
-                className={`flex ${
-                  msg.role === "user" ? "justify-end" : "justify-start"
+                className={`max-w-[80%] rounded-lg p-3 ${
+                  msg.role === "user"
+                    ? "bg-yellow-500 text-black"
+                    : "bg-[#1a1a4a] text-white"
                 }`}
               >
-                <div
-                  className={`max-w-[80%] rounded-lg p-3 ${
-                    msg.role === "user"
-                      ? "bg-yellow-500 text-black"
-                      : "bg-[#1a1a4a] text-white"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                  <div className="text-xs mt-1 opacity-70 text-right">
-                    {new Date(msg.timestamp).toLocaleTimeString()}
-                  </div>
+                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                <div className="text-xs mt-1 opacity-70 text-right">
+                  {new Date(msg.timestamp).toLocaleTimeString()}
                 </div>
               </div>
-            ))}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-[#1a1a4a] text-white rounded-lg p-3 max-w-[80%]">
-                  <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
-                  </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-[#1a1a4a] text-white rounded-lg p-3 max-w-[80%]">
+                <div className="flex space-x-2">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.2s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.4s" }}
+                  ></div>
                 </div>
               </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
 
-            {/* Suggested Questions - Show after any assistant message, not just at the beginning */}
-            {!isLoading && !isChatEnded && messages.length > 0 && messages[messages.length-1].role === "assistant" && (
-              <div className="px-4 pb-3">
-                <p className="text-yellow-200 text-sm mb-2">You might want to ask:</p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedQuestions.map((question, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSuggestedQuestion(question)}
-                      className="bg-[#2a2a5a] text-white px-3 py-2 rounded-lg text-sm hover:bg-[#3a3a6a] transition-colors"
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
+        {/* Suggested Questions */}
+        {!isLoading &&
+          !isChatEnded &&
+          messages.length > 0 &&
+          messages[messages.length - 1].role === "assistant" && (
+            <div className="px-4 pb-3">
+              <div className="text-yellow-200 text-sm mb-2">
+                You might want to ask:
               </div>
-            )}
+              <div className="flex flex-wrap gap-2">
+                {suggestedQuestions.map((question, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSuggestedQuestion(question)}
+                    className="bg-[#2a2a5a] text-white px-3 py-2 rounded-lg text-sm hover:bg-[#3a3a6a] transition-colors"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-          {/* Input */}
-          <div className="p-3 border-t border-gray-700">
-            <form onSubmit={handleSendMessage} className="flex items-center">
-              <textarea
-                ref={inputRef}
-                className="flex-1 bg-[#1a1a4a] text-white rounded-l-lg px-3 py-2 outline-none resize-none overflow-hidden h-10 min-h-[40px] max-h-[80px]"
-                placeholder={isChatEnded ? "Chat has ended" : "Type your message..."}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage(e);
-                  }
-                }}
-                rows={1}
-                disabled={isChatEnded}
-              />
+        {/* Input Area */}
+        <div className="p-4 bg-[#1a1a4a]/50 border-t border-white/5">
+          <form
+            onSubmit={handleSendMessage}
+            className="flex items-center gap-3 bg-[#2a2a6a]/50 p-2 rounded-2xl backdrop-blur-sm border border-white/10"
+          >
+            <textarea
+              id="send-message-input"
+              ref={inputRef}
+              className="flex-1 bg-transparent text-white px-4 py-2 outline-none resize-none
+              overflow-y-auto h-auto min-h-[44px] max-h-[200px] placeholder:text-white/50"
+              placeholder={
+                isChatEnded ? "Chat has ended" : "Type your message..."
+              }
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = `${e.target.scrollHeight}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage(e);
+                }
+              }}
+              disabled={isChatEnded}
+            />
+            {currentTxUUID ? (
+              renderExecuteButton()
+            ) : (
               <button
                 type="submit"
-                className={`${
-                  isChatEnded 
-                    ? "bg-gray-500 cursor-not-allowed" 
-                    : "bg-yellow-500 hover:bg-yellow-600"
-                } text-black font-bold rounded-r-lg px-3 py-2 transition-colors h-10`}
-                disabled={isLoading || isChatEnded}
+                id="send-message-input"
+                className="min-w-[100px] bg-yellow-500/90 backdrop-blur-sm text-black font-medium 
+                rounded-xl px-4 py-2 transition-all duration-200 h-[44px] flex items-center justify-center
+                hover:bg-yellow-500 border border-yellow-400/20 disabled:opacity-50"
               >
                 Send
               </button>
-            </form>
-            {isChatEnded && (
-              <p className="text-yellow-200 text-sm mt-2">
-                This conversation has ended. Start a new chat to continue.
-              </p>
             )}
-          </div>
+          </form>
+          {isChatEnded && (
+            <p className="text-yellow-200/90 text-sm mt-3 text-center">
+              This conversation has ended. Start a new chat to continue.
+            </p>
+          )}
         </div>
       </div>
-    );
+    </div>
+  );
 }
