@@ -20,6 +20,7 @@ import confetti from "canvas-confetti";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Card from "@/components/card/page";
+import Footer from "@/components/footer/page";
 
 interface AgentLog {
   id: string;
@@ -442,7 +443,7 @@ console.log("AVS Details:", avsDetails);
       </div>
 
       {/* Feature Agent Area */}
-      <div className="relative z-10 px-4 md:px-8 py-6 w-full">
+      <div className="relative z-10 px-4 md:px-8 py-6 w-full pb-32">
         <div className="bg-white/5 backdrop-blur-sm border border-gray-700 rounded-lg p-4 md:p-6 mb-6">
           <div className="flex items-center justify-between gap-4">
             <h1 className="text-2xl md:text-4xl font-bold text-yellow-400">
@@ -863,6 +864,9 @@ console.log("AVS Details:", avsDetails);
           </div>
         </div>
       )}
+      
+      {/* Footer */}
+      <Footer />
     </main>
   );
 }
