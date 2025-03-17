@@ -128,40 +128,35 @@ export default function Chatbot({
 
   // Watch for transaction hash in batchTxData
   useEffect(() => {
-    if (batchTxData?.transactionHash && !isTxSent && !hasShownTxSuccess) {
-      //wait 10 seconds
-      setTimeout(() => {
-        // Update message with transaction hash
-        const txMessage: Message = {
-          role: "assistant",
-          content: `Transaction submitted successfully!\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
-            TRANSACTION_VALUE
-          )}\nExecution Fee: ${formatWeiToEth(
-            executionFees
-          )}\n\nCheck at ScrollScan: https://sepolia.scrollscan.com/tx/${
-            batchTxData.transactionHash
-          }`,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev.slice(0, -1), txMessage]);
+    console.log("batchTxData", batchTxData);
+    if (batchTxData?.transactionHash && !hasShownTxSuccess) {
+      // Update message with transaction hash immediately
+      const txMessage: Message = {
+        role: "assistant",
+        content: `Transaction submitted successfully!\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
+          TRANSACTION_VALUE
+        )}\nExecution Fee: ${formatWeiToEth(
+          executionFees
+        )}\n\nCheck at ScrollScan: https://sepolia.scrollscan.com/tx/${
+          batchTxData.transactionHash
+        }`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev.slice(0, -1), txMessage]);
 
-        batchTxData.maxBlocksWaitTime;
-        // Open explorer in new tab
-        window.open(
-          `https://sepolia.scrollscan.com/tx/${batchTxData.transactionHash}`,
-          "_blank"
-        );
+      // Open explorer in new tab immediately
+      const explorerUrl = `https://sepolia.scrollscan.com/tx/${batchTxData.transactionHash}`;
+      window.open(explorerUrl, "_blank", "noopener,noreferrer");
 
-        //enable the button by removing the disabled attribute
-        document
-          .getElementById("send-message-input")
-          ?.removeAttribute("disabled");
-      }, 10000);
+      //enable the button by removing the disabled attribute
+      document
+        .getElementById("send-message-input")
+        ?.removeAttribute("disabled");
 
       // Mark that we've shown the success message
       setHasShownTxSuccess(true);
     }
-  }, [batchTxData, isTxSent, hasShownTxSuccess]);
+  }, [batchTxData, hasShownTxSuccess]);
 
   // Reset hasShownTxSuccess when starting a new transaction
   useEffect(() => {
@@ -305,11 +300,46 @@ export default function Chatbot({
         );
       }
 
+      console.log("taskDetails", taskDetails);
+
+      // Get the user's address from the account
+      if (!account?.address) {
+        throw new Error("User account not found");
+      }
+
+      let calldata = taskDetails.callData as `0x${string}`;
+
+      // The calldata format is:
+      // 0x617ba037 (function signature)
+      // 000000000000000000000000 (padding)
+      // 2c9678042d52b97d27f2bd2947f7111d93f3dd0d (asset address)
+      // 0000000000000000000000000000000000000000000000000000000000000064 (amount)
+      // 000000000000000000000000 (padding)
+      // 8d9411dc5dd40521ad3caa9a8f4f766fb7bd0a42 (onBehalfOf address)
+      // 0000000000000000000000000000000000000000000000000000000000000000 (referralCode)
+
+      // Replace the onBehalfOf address
+      const userAddress = account.address.replace("0x", "").padStart(64, "0");
+      console.log("userAddress", userAddress);
+
+      // Split the calldata into parts and replace the onBehalfOf address
+      const parts = {
+        start: calldata.slice(0, 202), // Everything up to onBehalfOf (function sig + asset + amount + padding)
+        onBehalfOf: userAddress, // Replace with user address
+        end: calldata.slice(266), // Keep referralCode
+      };
+
+      // Construct new calldata with user's address
+      const newCalldata =
+        `${parts.start}${parts.onBehalfOf}${parts.end}` as `0x${string}`;
+
+      console.log("newCalldata", newCalldata);
+
       // Prepare both transactions
       const transactions = [
         prepareTransaction({
           to: taskDetails.to,
-          data: taskDetails.callData as `0x${string}`,
+          data: newCalldata, // Fix: Remove quotes to use the actual newCalldata value
           chain: scrollSepolia,
           client: client,
           value: TRANSACTION_VALUE,
@@ -321,6 +351,8 @@ export default function Chatbot({
           value: executionFees,
         }),
       ];
+
+      console.log("transactions", transactions);
 
       setIsPreparingTx(false);
       setIsTxSent(true);
