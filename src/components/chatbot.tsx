@@ -129,7 +129,7 @@ export default function Chatbot({
   // Watch for transaction hash in batchTxData
   useEffect(() => {
     if (batchTxData?.transactionHash && !isTxSent && !hasShownTxSuccess) {
-      //wait 3 seconds
+      //wait 10 seconds
       setTimeout(() => {
         // Update message with transaction hash
         const txMessage: Message = {
@@ -156,7 +156,7 @@ export default function Chatbot({
         document
           .getElementById("send-message-input")
           ?.removeAttribute("disabled");
-      }, 5000);
+      }, 10000);
 
       // Mark that we've shown the success message
       setHasShownTxSuccess(true);
