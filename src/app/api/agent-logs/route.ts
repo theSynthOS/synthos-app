@@ -2,14 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
-// AVS logs API endpoint
-const AVS_LOGS_URL = "https://43f6-2001-d08-f0-8b29-908b-5e15-5bdb-5cdb.ngrok-free.app/logs/";
-const AVS_LOGS_API_KEY = "synthos";
+// AVS logs API endpoint from environment variables
+const AVS_LOGS_URL = process.env.NEXT_PUBLIC_AVS_LOGS_URL || "https://43f6-2001-d08-f0-8b29-908b-5e15-5bdb-5cdb.ngrok-free.app/logs/";
+const AVS_LOGS_API_KEY = process.env.NEXT_PUBLIC_AVS_LOGS_API_KEY || "synthos";
+
+console.log("AVS_LOGS_URL:", AVS_LOGS_URL);
+console.log("AVS_LOGS_API_KEY:", AVS_LOGS_API_KEY);
 
 // Parse log data from curl output
 function parseLogData(data: string) {
+  // If the data is empty, return an empty array
+  if (!data || data.trim() === '') {
+    console.log('[API Route] Empty data received');
+    return [];
+  }
+  
+  console.log('[API Route] Raw data length:', data.length);
+  
   // Split the data by "data:" prefix which is the SSE format
   const events = data.split(/data:/).filter(event => event.trim());
+  console.log('[API Route] Found', events.length, 'events');
   
   if (events.length === 0) {
     // If no events found, try to parse the whole data
@@ -33,7 +45,8 @@ function parseLogData(data: string) {
     }
   }
   
-  return events.map(event => {
+  // Process each event
+  const parsedEvents = events.map(event => {
     try {
       // Try to parse as JSON
       const jsonData = JSON.parse(event.trim());
@@ -68,59 +81,59 @@ function parseLogData(data: string) {
         message
       };
     } catch (e) {
-      // If not JSON, return as plain text
-      return {
-        id: `sse-text-${Math.random().toString(36).substring(2, 6)}`,
+      // If not JSON, try to extract timestamp and level from the text
+      const lines = event.trim().split('\n');
+      const parsedLines = lines.map(line => {
+        // Try to extract timestamp
+        const timestampMatch = line.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
+        let timestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString();
+        
+        // Try to extract level
+        let level = 'info';
+        if (line.includes('error')) level = 'error';
+        else if (line.includes('warn')) level = 'warn';
+        else if (line.includes('info')) level = 'info';
+        else if (line.includes('debug')) level = 'debug';
+        
+        // Clean up the message
+        let message = line;
+        if (timestampMatch) {
+          message = line.substring(line.indexOf(timestampMatch[1]) + timestampMatch[1].length).trim();
+        }
+        
+        return {
+          id: `line-${Math.random().toString(36).substring(2, 6)}`,
+          timestamp,
+          level,
+          message
+        };
+      });
+      
+      return parsedLines.length === 1 ? parsedLines[0] : {
+        id: `text-${Math.random().toString(36).substring(2, 6)}`,
         timestamp: new Date().toISOString(),
         level: 'info',
         message: event.trim()
       };
     }
-  });
-}
-
-// Function to fetch logs using node-fetch
-async function fetchLogsWithFetch() {
-  console.log('[API Route] Fetching logs with fetch');
+  }).flat().filter(Boolean); // Remove any undefined entries
   
-  try {
-    const response = await fetch(AVS_LOGS_URL, {
-      method: 'GET',
-      headers: {
-        'Accept': '*/*',
-        'x-api-key': AVS_LOGS_API_KEY
-      },
-      cache: 'no-store',
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Error fetching AVS logs: ${response.status} - ${response.statusText}`);
-    }
-    
-    const text = await response.text();
-    console.log('[API Route] Received data length:', text.length);
-    
-    // Parse the log data
-    const logs = parseLogData(text);
-    console.log('[API Route] Parsed logs:', logs.length);
-    
-    return logs;
-  } catch (error: any) {
-    console.error('[API Route] Error in fetchLogsWithFetch:', error);
-    
-    // Try using curl as a fallback
-    return fetchLogsWithCurl();
-  }
+  console.log('[API Route] Parsed', parsedEvents.length, 'events');
+  return parsedEvents;
 }
 
-// Function to fetch logs using curl (as a fallback)
+// Function to fetch logs using curl
 async function fetchLogsWithCurl() {
-  console.log('[API Route] Fetching logs with curl fallback');
+  console.log('[API Route] Fetching logs with curl');
   
   try {
-    // Use curl command that we know works
+    // Use curl command with a timeout to get a snapshot of the logs
+    // -m 5 sets a 5-second timeout to prevent hanging
     const execPromise = promisify(exec);
-    const { stdout } = await execPromise(`curl -s -N -H "x-api-key: ${AVS_LOGS_API_KEY}" ${AVS_LOGS_URL}`);
+    const curlCommand = `curl -s -m 5 -H "x-api-key: ${AVS_LOGS_API_KEY}" ${AVS_LOGS_URL}`;
+    console.log('[API Route] Executing curl command:', curlCommand);
+    
+    const { stdout, stderr } = await execPromise(curlCommand);
     
     console.log('[API Route] Received curl data length:', stdout.length);
     
@@ -129,26 +142,78 @@ async function fetchLogsWithCurl() {
     console.log('[API Route] Parsed logs from curl:', logs.length);
     
     return logs;
-  } catch (error) {
+  } catch (error: any) {
     console.error('[API Route] Error in fetchLogsWithCurl:', error);
     
-    // Return a sample log entry if both methods fail
+    // Check if we have stdout data even though there was an error (timeout but with data)
+    if (error.stdout && error.stdout.length > 0) {
+      console.log('[API Route] Found data in error.stdout, length:', error.stdout.length);
+      const logs = parseLogData(error.stdout);
+      console.log('[API Route] Parsed logs from error.stdout:', logs.length);
+      
+      if (logs.length > 0) {
+        return logs;
+      }
+    }
+    
+    // Return a sample log entry if curl fails
     return [{
       id: 'error-' + Math.random().toString(36).substring(2, 6),
       timestamp: new Date().toISOString(),
       level: 'error',
-      message: `Error fetching logs: ${error instanceof Error ? error.message : String(error)}`
+      message: `Error fetching logs: ${error.message || String(error)}`
     }];
   }
+}
+
+// Parse the raw SSE data into individual log entries
+function parseSSEData(data: string) {
+  // Split by data: and filter out empty lines
+  const entries = data.split(/data:/).filter(entry => entry.trim());
+  
+  return entries.map(entry => {
+    const lines = entry.trim().split('\n').filter(line => line.trim());
+    
+    return lines.map(line => {
+      // Try to extract timestamp
+      const timestampMatch = line.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
+      let timestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString();
+      
+      // Try to extract level
+      let level = 'info';
+      if (line.includes('error')) level = 'error';
+      else if (line.includes('warn')) level = 'warn';
+      
+      return {
+        id: `sse-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp,
+        level,
+        message: line
+      };
+    });
+  }).flat();
 }
 
 export async function GET(request: NextRequest) {
   console.log('[API Route] GET /api/agent-logs called (fetching AVS logs)');
   
   try {
-    // Try fetch first, then fall back to curl if needed
-    const logs = await fetchLogsWithFetch();
+    // Use curl to get a snapshot of the logs
+    const logs = await fetchLogsWithCurl();
     
+    if (logs.length === 0) {
+      console.log('[API Route] No logs returned, adding a placeholder');
+      return NextResponse.json({ 
+        log: [{
+          id: 'placeholder-' + Math.random().toString(36).substring(2, 6),
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: 'No logs available at this time. Please check back later.'
+        }]
+      });
+    }
+    
+    // Return the logs
     return NextResponse.json({ log: logs });
   } catch (error) {
     console.error('[API Route] Error in AVS logs API route:', error);

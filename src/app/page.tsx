@@ -45,28 +45,76 @@ export default function Home() {
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (showModal) {
+    if (showModal && activeTab === "logs") {
       // Initial load of logs
       loadAVSLogs();
       
-      // Set up polling for logs every 10 seconds when modal is open and logs tab is active
-      const refreshInterval = setInterval(() => {
-        if (activeTab === "logs") {
-          console.log("Polling AVS logs...");
-          loadAVSLogs(false);
-        }
-      }, 10000); // Poll every 10 seconds
+      // Set up SSE connection for real-time logs
+      const eventSource = setupLogStream();
       
-      // Clean up interval when modal closes
-      return () => clearInterval(refreshInterval);
+      // Clean up SSE connection when component unmounts or tab changes
+      return () => {
+        if (eventSource) {
+          console.log("Closing SSE connection");
+          eventSource.close();
+        }
+      };
     }
   }, [showModal, activeTab]);
+
+  // Setup SSE connection for real-time logs
+  const setupLogStream = () => {
+    if (typeof window === 'undefined') return null;
+    
+    console.log("Setting up SSE connection for logs");
+    const eventSource = new EventSource('/api/agent-logs/stream');
+    
+    eventSource.onopen = () => {
+      console.log("SSE connection opened");
+      setIsLoadingLogs(false);
+    };
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const logEntry = JSON.parse(event.data);
+        console.log("SSE log received:", logEntry);
+        
+        // Add the new log to the state
+        setAgentLogs(prevLogs => {
+          // Add the new log to the beginning of the array
+          const newLogs = [logEntry, ...prevLogs];
+          
+          // Sort logs by timestamp (newest first)
+          const sortedLogs = newLogs.sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+          
+          // Limit to 100 logs to prevent performance issues
+          return sortedLogs.slice(0, 100);
+        });
+        
+        // Clear any error message
+        setLogError(null);
+      } catch (error) {
+        console.error("Error parsing SSE log:", error);
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error("SSE connection error:", error);
+      setLogError("Error in log stream connection");
+      eventSource.close();
+    };
+    
+    return eventSource;
+  };
 
   const loadAVSLogs = async (scrollToBottom = false) => {
     setIsLoadingLogs(true);
     setLogError(null);
     
     try {
+      console.log("Fetching AVS logs...");
       const logs = await fetchAgentLogs();
       
       console.log("AVS Logs received:", logs);
@@ -76,7 +124,11 @@ export default function Home() {
         const sortedLogs = [...logs].sort((a, b) => 
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
-        setAgentLogs(sortedLogs);
+        
+        // Limit to 50 logs to prevent performance issues
+        const limitedLogs = sortedLogs.slice(0, 50);
+        
+        setAgentLogs(limitedLogs);
         setLogError(null);
         
         // Only scroll to bottom if explicitly requested
@@ -96,27 +148,6 @@ export default function Home() {
     } finally {
       setIsLoadingLogs(false);
     }
-  };
-
-  // Handle new logs from SSE
-  const handleNewLogs = (newLogs: AgentLog[]) => {
-    console.log("New SSE logs received:", newLogs);
-    
-    setAgentLogs(prevLogs => {
-      // Combine new logs with existing logs
-      const combinedLogs = [...newLogs, ...prevLogs];
-      
-      // Sort logs by timestamp (newest first)
-      const sortedLogs = combinedLogs.sort((a, b) => 
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
-      
-      // Limit to 100 logs to prevent performance issues
-      return sortedLogs.slice(0, 100);
-    });
-    
-    // Clear any error message
-    setLogError(null);
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -267,7 +298,7 @@ export default function Home() {
               onClick={() => setShowComingSoonModal(true)}
               className="mt-4 px-8 py-2"
             >
-              Create Agent
+          Create Agent
             </CustomButton>
 
             <CustomButton
@@ -279,7 +310,7 @@ export default function Home() {
           </div>
         </div>
       </div>
-      
+
       {/* Feature Agent Area */}
       <div className="relative z-10 px-4 md:px-8 py-6 w-full">
         <h1 className="text-2xl md:text-4xl font-bold mb-6 md:mb-8 text-yellow-400">Featured Agents</h1>
@@ -323,7 +354,7 @@ export default function Home() {
           </div>
         </div>
       </div>
-      
+
       {/* Modal with Agent Details and Chat */}
       {showModal && (
         <Modal
@@ -347,7 +378,7 @@ export default function Home() {
                 >
                   AVS Logs
                 </button>
-              </div>
+            </div>
 
               {/* Tab Content */}
               <div className="flex-1 overflow-auto">
@@ -434,6 +465,7 @@ export default function Home() {
                     
                     {isLoadingLogs ? (
                       <div className="text-center py-4">
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yellow-500 mb-2"></div>
                         <p className="text-gray-400">Loading logs...</p>
                       </div>
                     ) : logError ? (
