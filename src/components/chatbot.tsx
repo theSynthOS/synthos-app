@@ -384,6 +384,11 @@ export default function Chatbot({
       // Process the response (which is now always an array of items)
       if (Array.isArray(response)) {
         response.forEach((item) => {
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log("GOES HEREEEEE");
+        response.map((item: any) => {
+          console.log("item: ", item);
           const assistantMessage: Message = {
             role: "assistant",
             content: item.text,
@@ -403,16 +408,31 @@ export default function Chatbot({
             setIsChatEnded(true);
           }
         });
+        })
       } else {
-        // Fallback for unexpected response format
-        console.error("Unexpected response format:", response);
-        const errorMessage: Message = {
+        console.log("GOES HERE ELSE");
+        const assistantMessage: Message = {
           role: "assistant",
           content:
             "Sorry, I received an unexpected response format. Please try again.",
+          content: response.response,
           timestamp: new Date(),
+          metadata: response.metadata,
         };
-        setMessages((prev) => [...prev, errorMessage]);
+        setMessages((prev) => [...prev, assistantMessage]);
+        
+        // Generate new suggested questions based on the response content
+        // Use metadata.suggestedQuestions if available, otherwise generate them
+        if (response.metadata?.suggestedQuestions) {
+          setSuggestedQuestions(response.metadata.suggestedQuestions);
+        } else {
+          setSuggestedQuestions(generateFollowUpQuestions(response.response));
+        }
+      }
+      
+      // Check if the chat should end
+      if (response.metadata?.action === "END") {
+        setIsChatEnded(true);
       }
     } catch (error) {
       console.error("Error:", error);
@@ -540,6 +560,11 @@ Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
         // Process the response (which is now always an array of items)
         if (Array.isArray(response)) {
           response.forEach((item) => {
+      .then(response => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("GOES HEREEEEE");
+          response.map((item: any) => {
+            console.log("item: ", item);
             const assistantMessage: Message = {
               role: "assistant",
               content: item.text,
@@ -559,16 +584,31 @@ Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
               setIsChatEnded(true);
             }
           });
+          })
         } else {
-          // Fallback for unexpected response format
-          console.error("Unexpected response format:", response);
-          const errorMessage: Message = {
+          console.log("GOES HERE ELSE");
+          const assistantMessage: Message = {
             role: "assistant",
             content:
               "Sorry, I received an unexpected response format. Please try again.",
+            content: response.response,
             timestamp: new Date(),
+            metadata: response.metadata,
           };
-          setMessages((prev) => [...prev, errorMessage]);
+          setMessages((prev) => [...prev, assistantMessage]);
+          
+          // Generate new suggested questions based on the response content
+          // Use metadata.suggestedQuestions if available, otherwise generate them
+          if (response.metadata?.suggestedQuestions) {
+            setSuggestedQuestions(response.metadata.suggestedQuestions);
+          } else {
+            setSuggestedQuestions(generateFollowUpQuestions(response.response));
+          }
+        }
+        
+        // Check if the chat should end
+        if (response.metadata?.action === "END") {
+          setIsChatEnded(true);
         }
       })
       .catch((error) => {

@@ -19,6 +19,7 @@ import { isLoggedIn } from "../actions/login";
 import confetti from "canvas-confetti";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import Card from "@/components/card/page";
 
 interface AgentLog {
   id: string;
@@ -43,6 +44,16 @@ interface AgentData {
   agentLocation?: string;
 }
 
+interface AVSPolicyData {
+  name: string;
+  description: string;
+  whenCondition: any;
+  howCondition: any;
+  whatCondition: any;
+  isActive: boolean;
+  creator: string;
+}
+
 const faucet = getContract({
   address: "0x602396FFA43b7FfAdc80e01c5A11fc74F3BA59f5",
   chain: scrollSepolia,
@@ -63,6 +74,7 @@ export default function Home() {
   const [logError, setLogError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const [showConditions, setShowConditions] = useState(false);
   const account = useActiveAccount();
 
   // Get wallet balance
@@ -90,22 +102,164 @@ export default function Home() {
   }, [account]);
 
   useEffect(() => {
-    if (showModal) {
+    if (showModal && activeTab === "logs") {
       // Initial load of logs
       loadAVSLogs();
-
-      // Set up polling for logs every 10 seconds when modal is open and logs tab is active
-      const refreshInterval = setInterval(() => {
-        if (activeTab === "logs") {
-          console.log("Polling AVS logs...");
-          loadAVSLogs(false);
+      
+      // Set up SSE connection for real-time logs
+      const eventSource = setupLogStream();
+      
+      // Clean up SSE connection when component unmounts or tab changes
+      return () => {
+        if (eventSource) {
+          console.log("Closing SSE connection");
+          eventSource.close();
         }
-      }, 10000); // Poll every 10 seconds
-
-      // Clean up interval when modal closes
-      return () => clearInterval(refreshInterval);
+      };
     }
   }, [showModal, activeTab]);
+
+  // Contract read agent details
+  const contract = getContract({
+    client,
+    address: "0x6ed02Bf56bEB79D47F734eE6BB4701B9789b4D5b",
+    chain: scrollSepolia
+  })
+
+// Contract read AVS 
+const avsContract = getContract({
+  client,
+  address: "0xa7B0446a0Fa8e8c503774987931E071E3DdF271A",
+  chain: scrollSepolia
+})
+
+  // First get the agent hash by ID
+  const { data: agentHash, isLoading: isAgentHashLoading } = useReadContract({
+    contract,
+    method: "function getAgentHashById(uint256 agentId) returns (string)",
+    params: [BigInt(0)],
+  });
+
+  // Then use the hash to get agent details - use empty string if hash not available yet
+  const { data: agentDetails, isLoading: isAgentDetailsLoading } = useReadContract({
+    contract,
+    method: "function getAgent(string memory dockerfileHash) returns (address owner, uint256 executionFee, uint256[] memory policyIds, bool isRegistered, string memory agentDockerfileHash, string memory agentLocation, string memory description, uint8 category)",
+    params: [agentHash || ""],
+  });
+
+  // Log the agent details and policy ID for debugging
+  useEffect(() => {
+    if (agentDetails) {
+      console.log("Agent Details:", agentDetails);
+      console.log("Policy IDs:", agentDetails[2]);
+    }
+  }, [agentDetails]);
+
+  // Contract read AVS details - use the correct method signature
+  const { data: avsDetails, isLoading: isAVSLoading } = useReadContract({
+    contract: avsContract,
+    method: "getPolicyMetadata(uint256)",
+    params: [BigInt(1)]
+  });
+console.log("AVS Details:", avsDetails);
+
+  // Mock AVS policy data to use when real data is not available
+  const mockAVSPolicyData: AVSPolicyData = {
+    name: "AAVE Complete AVS Plugin",
+    description: "This plugin allows for the supply, borrow, repay, withdraw and deposit actions to be done for the Scroll AAVE Market",
+    whenCondition: "0.0",
+    howCondition: "0x7b2270726f746f636f6c223a224141564522",
+    whatCondition: "0x7b2261637469766974696573223a5b227375707073796c79222c22626f72726f77222c227265706179222c2277697468647261772c2264657073697422225d7d",
+    isActive: true,
+    creator: "0x1234567890123456789012345678901234567890"
+  };
+
+  // Get the AVS policy data with fallback to mock data
+  const avsPolicyData: AVSPolicyData | null = avsDetails ? {
+    name: avsDetails[0] as string || "",
+    description: avsDetails[1] as string || "",
+    whenCondition: avsDetails[2] || "",
+    howCondition: avsDetails[3] || "",
+    whatCondition: avsDetails[4] || "",
+    isActive: avsDetails[5] as boolean || false,
+    creator: avsDetails[6] as string || ""
+  } : mockAVSPolicyData;
+
+  // Extract agent data from contract if available
+  const contractAgentData: AgentData = agentDetails ? {
+    id: "0", // Using the ID we queried with
+    name: "AAVE Agent", // This could be derived from description or set manually
+    description: agentDetails[6], // description
+    category: "DeFi",
+    creationDate: new Date().toISOString().split('T')[0], // Current date as fallback
+    walletAddress: agentDetails[0], // owner address
+    executionFees: (Number(agentDetails[1]) / 1e18) + " ETH", // Convert wei to ETH
+    avsPlugin: avsPolicyData?.name || "", // Use AVS policy name if available
+    totalTxExecuted: "0", // Default value
+    lastTxHash: "", // Default value
+    agentLocation: agentDetails[5], // agentLocation
+    dockerfileHash: agentDetails[4], // agentDockerfileHash
+  } : {
+    id: "0",
+    name: "Loading...",
+    description: "Loading agent data...",
+    category: "Unknown",
+    creationDate: "",
+    walletAddress: "",
+    executionFees: "",
+    avsPlugin: "",
+    totalTxExecuted: "",
+    lastTxHash: "",
+    agentLocation: "",
+    dockerfileHash: "",
+  };
+
+  // Setup SSE connection for real-time logs
+  const setupLogStream = () => {
+    if (typeof window === 'undefined') return null;
+    
+    console.log("Setting up SSE connection for logs");
+    const eventSource = new EventSource('/api/agent-logs/stream');
+    
+    eventSource.onopen = () => {
+      console.log("SSE connection opened");
+      setIsLoadingLogs(false);
+    };
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const logEntry = JSON.parse(event.data);
+        console.log("SSE log received:", logEntry);
+        
+        // Add the new log to the state
+        setAgentLogs(prevLogs => {
+          // Add the new log to the beginning of the array
+          const newLogs = [logEntry, ...prevLogs];
+          
+          // Sort logs by timestamp (newest first)
+          const sortedLogs = newLogs.sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+          
+          // Limit to 100 logs to prevent performance issues
+          return sortedLogs.slice(0, 100);
+        });
+        
+        // Clear any error message
+        setLogError(null);
+      } catch (error) {
+        console.error("Error parsing SSE log:", error);
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error("SSE connection error:", error);
+      setLogError("Error in log stream connection");
+      eventSource.close();
+    };
+    
+    return eventSource;
+  };
 
   const loadAVSLogs = async (scrollToBottom = false) => {
     setIsLoadingLogs(true);
@@ -113,16 +267,18 @@ export default function Home() {
 
     try {
       const logs = await fetchAgentLogs();
-
-      console.log("AVS Logs received:", logs);
-
+      
       if (logs && logs.length > 0) {
         // Sort logs by timestamp (newest first)
         const sortedLogs = [...logs].sort(
           (a, b) =>
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
-        setAgentLogs(sortedLogs);
+        
+        // Limit to 50 logs to prevent performance issues
+        const limitedLogs = sortedLogs.slice(0, 50);
+        
+        setAgentLogs(limitedLogs);
         setLogError(null);
 
         // Only scroll to bottom if explicitly requested
@@ -142,28 +298,6 @@ export default function Home() {
     } finally {
       setIsLoadingLogs(false);
     }
-  };
-
-  // Handle new logs from SSE
-  const handleNewLogs = (newLogs: AgentLog[]) => {
-    console.log("New SSE logs received:", newLogs);
-
-    setAgentLogs((prevLogs) => {
-      // Combine new logs with existing logs
-      const combinedLogs = [...newLogs, ...prevLogs];
-
-      // Sort logs by timestamp (newest first)
-      const sortedLogs = combinedLogs.sort(
-        (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
-
-      // Limit to 100 logs to prevent performance issues
-      return sortedLogs.slice(0, 100);
-    });
-
-    // Clear any error message
-    setLogError(null);
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -343,7 +477,7 @@ export default function Home() {
               onClick={() => setShowComingSoonModal(true)}
               className="mt-4 px-8 py-2 text-xl"
             >
-              Create Agent
+          Create Agent
             </CustomButton>
 
             <CustomButton
@@ -450,33 +584,26 @@ export default function Home() {
               </div>
             ) : (
               <>
-                <h2 className="text-xl md:text-2xl font-bold text-white mb-2 md:mb-3">
-                  {displayAgentData.name}
-                </h2>
-                <p className="text-gray-300 mb-3 md:mb-4 text-sm md:text-base">
-                  {displayAgentData.description}
-                </p>
-
+                <h2 className="text-xl md:text-2xl font-bold text-yellow-300 mb-2 md:mb-3">{displayAgentData.name}</h2>
+                <p className="text-gray-200/90 mb-3 md:mb-4 text-sm md:text-base">{displayAgentData.description}</p>
+                
                 <div className="mb-3 md:mb-4 text-sm md:text-base">
                   <span className="text-gray-400">Execution Fee:</span>
                   <span className="ml-2 text-white">
                     {formatWeiToEth(displayAgentData.executionFees)}
                   </span>
                 </div>
-
-                <div className="text-xs md:text-sm text-gray-400 mt-2 md:mt-4">
-                  Powered by{" "}
-                  <a href="#" className="text-blue-400 hover:underline">
-                    Autonome
-                  </a>
+                
+                <div className="text-xs md:text-sm text-yellow-200 mt-2 md:mt-4">
+                  Powered by:  <a href="#" className="text-white hover:underline">Autonome</a>
                 </div>
               </>
             )}
           </div>
 
           {/* Add Your Agent Card */}
-          <div
-            className="bg-white/5 backdrop-blur-sm border border-dashed border-gray-700 rounded-lg p-4 md:p-6 flex items-center justify-center hover:border-green-500 transition-colors cursor-pointer"
+          <div 
+            className="bg-white/5 backdrop-blur-sm border border-dashed border-gray-700 rounded-lg p-4 md:p-6 flex items-center justify-center hover:border-yellow-500 transition-colors cursor-pointer"
             onClick={() => setShowComingSoonModal(true)}
           >
             <div className="text-center">
@@ -522,12 +649,15 @@ export default function Home() {
                 >
                   AVS Logs
                 </button>
-              </div>
+            </div>
 
               {/* Tab Content */}
               <div className="flex-1 overflow-auto">
                 {activeTab === "info" ? (
                   <div className="space-y-4">
+                    <h2 className="text-2xl font-bold text-white">{displayAgentData.name}</h2>
+                    <p className="text-white">{displayAgentData.description}</p>
+                    
                     <h2 className="text-2xl font-bold text-white">
                       {displayAgentData.name}
                     </h2>
@@ -536,80 +666,109 @@ export default function Home() {
                     </p>
 
                     <div className="mt-6 space-y-3">
-                      <div>
-                        <span className="text-gray-400">Category:</span>
-                        <span className="ml-2 text-white">
-                          {displayAgentData.category}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">
-                          Agent Creation Date:
-                        </span>
-                        <a
-                          href="#"
-                          className="ml-2 text-blue-400 hover:underline"
-                        >
-                          {displayAgentData.creationDate}
-                        </a>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Wallet Address:</span>
-                        <span className="ml-2 text-white">
-                          {displayAgentData.walletAddress}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Execution Fees:</span>
-                        <span className="ml-2 text-white">
-                          {formatWeiToEth(displayAgentData.executionFees)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">AVS Plugin:</span>
-                        <span className="ml-2 text-white">
-                          {displayAgentData.avsPlugin}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">
-                          Total tx executed:
-                        </span>
-                        <span className="ml-2 text-white">
-                          {displayAgentData.totalTxExecuted}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Hash of past tx:</span>
-                        <a
-                          href="#"
-                          className="ml-2 text-blue-400 hover:underline"
-                        >
-                          {displayAgentData.lastTxHash}
-                        </a>
-                      </div>
+                      <Card className="bg-yellow-200">
+                        <span className="text-yellow-700 font-bold">Category:</span>
+                        <span className="ml-2 text-yellow-900">{displayAgentData.category}</span>
+                      </Card>
+                      <Card className="border border-dashed border-yellow-200">
+                        <span className="text-white font-bold">Agent Creation Date:</span>
+                        <a href="#" className="ml-2 text-yellow-200">{displayAgentData.creationDate}</a>
+                      </Card>
+                      <Card className="border border-dashed border-yellow-200">
+                        <span className="text-white font-bold">Wallet Address:</span>
+                        <pre className="ml-2 text-yellow-200">{displayAgentData.walletAddress}</pre>
+                      </Card>
+                      <Card className="border border-dashed border-yellow-200">
+                        <span className="text-white font-bold">Execution Fees:</span>
+                        <span className="ml-2 text-yellow-200">{displayAgentData.executionFees}</span>
+                      </Card>
+                      <Card className="bg-yellow-200">
+                        <span className="text-yellow-600 font-bold">AVS Plugin:</span>
+                        <span className="ml-2 text-yellow-900">{displayAgentData.avsPlugin || ""}</span>
+                      </Card>
+                      {avsPolicyData && (
+                        <>
+                          <Card className="border border-dashed border-yellow-200">
+                            <span className="text-white font-bold">AVS Policy Description:</span>
+                            <span className="ml-2 text-yellow-200">{avsPolicyData.description}</span>
+                          </Card>
+                          <Card className="border border-dashed border-yellow-200">
+                            <span className="text-gray-400">AVS Policy Status:</span>
+                            <span className={`ml-2 ${avsPolicyData.isActive ? "text-green-400" : "text-red-400"}`}>
+                              {avsPolicyData.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </Card>
+                          <Card className="border border-dashed border-yellow-200">
+                            <span className="text-white font-bold">AVS Policy Creator:</span>
+                            <a 
+                              href={`https://sepolia.scrollscan.dev/address/${avsPolicyData.creator}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="ml-2 text-yellow-200 hover:underline break-all"
+                            >
+                              {avsPolicyData.creator}
+                            </a>
+                          </Card>
+                          
+                          {/* Collapsible Conditions Section */}
+                          <div className="mt-4">
+                            <button 
+                              onClick={() => setShowConditions(!showConditions)}
+                              className="flex items-center text-yellow-400 hover:text-yellow-300 transition-colors"
+                            >
+                              <span className="mr-2">{showConditions ? '▼' : '►'}</span>
+                              <span>AVS Policy Conditions</span>
+                            </button>
+                            
+                            {showConditions && (
+                              <div className="mt-3 pl-4 border-l-2 border-gray-700 space-y-4">
+                                {/* When Condition */}
+                                <div>
+                                  <h4 className="text-yellow-200 font-medium mb-1">When Condition</h4>
+                                  <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
+                                    {JSON.stringify(avsPolicyData.whenCondition, null, 2) || "0.0"}
+                                  </pre>
+                                </div>
+                                
+                                {/* How Condition */}
+                                <div>
+                                  <h4 className="text-yellow-200 font-medium mb-1">How Condition</h4>
+                                  <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
+                                    {JSON.stringify(avsPolicyData.howCondition, null, 2)}
+                                  </pre>
+                                </div>
+                                
+                                {/* What Condition */}
+                                <div>
+                                  <h4 className="text-yellow-200 font-medium mb-1">What Condition</h4>
+                                  <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
+                                    {JSON.stringify(avsPolicyData.whatCondition, null, 2)}
+                                  </pre>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                      <Card className="border border-dashed border-yellow-200">
+                        <span className="text-white font-bold">Total tx executed:</span>
+                        <span className="ml-2 text-yellow-200">{displayAgentData.totalTxExecuted}</span>
+                      </Card>
+                      <Card className="border border-dashed border-yellow-200">
+                        <span className="text-white">Hash of past tx:</span>
+                        <a href="#" className="ml-2 text-blue-400 hover:underline">{displayAgentData.lastTxHash || "No transactions yet"}</a>
+                      </Card>
                       {displayAgentData.dockerfileHash && (
-                        <div>
-                          <span className="text-gray-400">
-                            Dockerfile Hash:
-                          </span>
-                          <span className="ml-2 text-white break-all">
-                            {displayAgentData.dockerfileHash}
-                          </span>
-                        </div>
+                        <Card className="border border-dashed border-yellow-200">
+                          <span className="text-white font-bold">Dockerfile Hash:</span>
+                          <span className="ml-2 text-yellow-200 break-all">{displayAgentData.dockerfileHash}</span>
+                        </Card>
                       )}
                       {displayAgentData.agentLocation && (
-                        <div>
-                          <span className="text-gray-400">Agent Location:</span>
-                          <a
-                            href={displayAgentData.agentLocation}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-2 text-blue-400 hover:underline break-all"
-                          >
-                            {displayAgentData.agentLocation}
-                          </a>
-                        </div>
+                        <Card className="border border-dashed border-yellow-200">
+                          <span className="text-white">Agent Location:</span>
+                          <a href={displayAgentData.agentLocation} target="_blank" rel="noopener noreferrer" className="ml-2 text-yellow-200 hover:underline break-all">{displayAgentData.agentLocation}</a>
+                        </Card>
                       )}
                       <div className="md:hidden mt-4">
                         <CustomButton
@@ -650,6 +809,7 @@ export default function Home() {
 
                     {isLoadingLogs ? (
                       <div className="text-center py-4">
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yellow-500 mb-2"></div>
                         <p className="text-gray-400">Loading logs...</p>
                       </div>
                     ) : logError ? (
@@ -690,8 +850,8 @@ export default function Home() {
                         ))}
                         <div ref={logsEndRef} />
                       </div>
-                    )}
-                  </div>
+                  )}
+                </div>
                 )}
               </div>
             </div>
