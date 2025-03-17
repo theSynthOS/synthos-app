@@ -6,7 +6,13 @@ import { fetchAgentLogs } from "../services/aiAgent";
 import Modal from "../components/detailModal";
 import { motion } from "framer-motion";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
-import { getContract, prepareContractCall, prepareTransaction } from "thirdweb";
+import {
+  getContract,
+  prepareContractCall,
+  prepareTransaction,
+  eth_getTransactionCount,
+  getRpcClient,
+} from "thirdweb";
 import {
   useActiveAccount,
   useReadContract,
@@ -52,18 +58,19 @@ interface AgentData {
 interface AVSPolicyData {
   name: string;
   description: string;
-  whenCondition: any;
-  howCondition: any;
-  whatCondition: any;
+  whenCondition: {
+    startTime: string;
+    endTime: string;
+  };
+  howCondition: {
+    allowedFunctions: `0x${string}`[];
+  };
+  whatCondition: {
+    allowedContracts: `0x${string}`[];
+  };
   isActive: boolean;
   creator: string;
 }
-
-const faucet = getContract({
-  address: "0x602396FFA43b7FfAdc80e01c5A11fc74F3BA59f5",
-  chain: scrollSepolia,
-  client: client,
-});
 
 const formatWeiToEth = (wei: bigint): string => {
   return (Number(wei) / 1e18).toFixed(3) + " ETH";
@@ -93,6 +100,8 @@ export default function Home() {
     USDC: "0",
     DAI: "0",
   });
+  const [agentTxCount, setAgentTxCount] = useState("0");
+  const [latestTxHash, setLatestTxHash] = useState("");
 
   // Get wallet balance
   const { data: balance } = useWalletBalance({
@@ -183,65 +192,174 @@ export default function Home() {
     params: [BigInt(1)],
   }) as {
     data:
-      | {
-          name: string;
-          description: string;
-          whenCondition: { startTime: bigint; endTime: bigint };
-          howCondition: { allowedFunctions: `0x${string}`[] };
-          whatCondition: { allowedContracts: `0x${string}`[] };
-          isActive: boolean;
-          creator: `0x${string}`;
-        }
+      | [
+          string, // name
+          string, // description
+          { startTime: bigint; endTime: bigint }, // whenCondition
+          { allowedFunctions: `0x${string}`[] }, // howCondition
+          { allowedContracts: `0x${string}`[] }, // whatCondition
+          boolean, // isActive
+          `0x${string}` // creator
+        ]
       | undefined;
     isLoading: boolean;
   };
 
-  console.log("AVS Details:", avsDetails);
+  // Log contract call status with more detail
+  useEffect(() => {
+    if (avsDetails) {
+      const [
+        name,
+        description,
+        whenCondition,
+        howCondition,
+        whatCondition,
+        isActive,
+        creator,
+      ] = avsDetails;
+      console.log("Contract call status:", {
+        isLoading: isAVSLoading,
+        hasData: true,
+        dataFields: {
+          hasName: !!name,
+          hasDescription: !!description,
+          hasWhenCondition: !!whenCondition,
+          hasHowCondition: !!howCondition,
+          hasWhatCondition: !!whatCondition,
+          hasIsActive: isActive !== undefined,
+          hasCreator: !!creator,
+        },
+        rawData: avsDetails,
+      });
+    } else {
+      console.log("Contract call status:", {
+        isLoading: isAVSLoading,
+        hasData: false,
+        dataFields: null,
+        rawData: null,
+      });
+    }
+  }, [isAVSLoading, avsDetails]);
 
   // Mock AVS policy data to use when real data is not available
   const mockAVSPolicyData: AVSPolicyData = {
     name: "AAVE Complete AVS Plugin",
     description:
       "This plugin allows for the supply, borrow, repay, withdraw and deposit actions to be done for the Scroll AAVE Market",
-    whenCondition: "0.0",
-    howCondition: "0x7b2270726f746f636f6c223a224141564522",
-    whatCondition:
-      "0x7b2261637469766974696573223a5b227375707073796c79222c22626f72726f77222c227265706179222c2277697468647261772c2264657073697422225d7d",
+    whenCondition: {
+      startTime: "0.0",
+      endTime: "0.0",
+    },
+    howCondition: {
+      allowedFunctions: ["0x7b2270726f746f636f6c223a224141564522"],
+    },
+    whatCondition: {
+      allowedContracts: [
+        "0x7b2261637469766974696573223a5b227375707073796c79222c22626f72726f77222c227265706179222c2277697468647261772c2264657073697422225d7d",
+      ],
+    },
     isActive: true,
     creator: "0x1234567890123456789012345678901234567890",
   };
 
-  // Get the AVS policy data with fallback to mock data
-  const avsPolicyData: AVSPolicyData | null =
-    avsDetails !== undefined
-      ? {
-          name: avsDetails?.name,
-          description: avsDetails?.description,
-          whenCondition: avsDetails?.whenCondition,
-          howCondition: avsDetails?.howCondition,
-          whatCondition: avsDetails?.whatCondition,
-          isActive: avsDetails?.isActive,
-          creator: avsDetails?.creator,
+  // Add state for AVS policy data
+  const [avsPolicyData, setAvsPolicyData] = useState<AVSPolicyData | null>(
+    mockAVSPolicyData
+  );
+
+  // Update avsPolicyData when avsDetails changes
+  useEffect(() => {
+    if (avsDetails) {
+      const [
+        name,
+        description,
+        whenCondition,
+        howCondition,
+        whatCondition,
+        isActive,
+        creator,
+      ] = avsDetails;
+      // Update state with actual data from contract
+      setAvsPolicyData({
+        name: name || mockAVSPolicyData.name,
+        description: description || mockAVSPolicyData.description,
+        whenCondition: {
+          startTime: whenCondition?.startTime?.toString() || "0",
+          endTime: whenCondition?.endTime?.toString() || "0",
+        },
+        howCondition: {
+          allowedFunctions: howCondition?.allowedFunctions || [],
+        },
+        whatCondition: {
+          allowedContracts: whatCondition?.allowedContracts || [],
+        },
+        isActive: isActive ?? mockAVSPolicyData.isActive,
+        creator: creator || mockAVSPolicyData.creator,
+      });
+    }
+  }, [avsDetails]);
+
+  // Get total transactions (nonce) for the agent address
+  useEffect(() => {
+    const fetchTxCount = async () => {
+      try {
+        const rpcRequest = getRpcClient({ client, chain: scrollSepolia });
+        const count = await eth_getTransactionCount(rpcRequest, {
+          address: "0xb836c597BC6733F4BAf182CB7BA9FBeEC46F73Ff",
+        });
+        setAgentTxCount(count.toString());
+      } catch (error) {
+        console.error("Error fetching transaction count:", error);
+      }
+    };
+    fetchTxCount();
+  }, []);
+
+  // Get latest transaction hash
+  useEffect(() => {
+    const fetchLatestTx = async () => {
+      try {
+        const rpcRequest = getRpcClient({ client, chain: scrollSepolia });
+        const block = await rpcRequest({
+          method: "eth_getBlockByNumber",
+          params: ["latest", true],
+        });
+
+        if (block?.transactions) {
+          const agentTxs = (
+            block.transactions as { from: string; hash: string }[]
+          ).filter(
+            (tx) =>
+              tx.from.toLowerCase() ===
+              "0xb836c597BC6733F4BAf182CB7BA9FBeEC46F73Ff".toLowerCase()
+          );
+
+          if (agentTxs.length > 0) {
+            setLatestTxHash(agentTxs[0].hash);
+          }
         }
-      : mockAVSPolicyData;
+      } catch (error) {
+        console.error("Error fetching latest tx:", error);
+      }
+    };
+    fetchLatestTx();
+  }, []);
 
-  console.log("AVS Policy Data:", avsPolicyData);
-
-  // Extract agent data from contract if available
+  // Update contractAgentData to use latestTxHash
   const contractAgentData: AgentData = agentDetails
     ? {
-        id: "0", // Using the ID we queried with
-        name: "AAVE Agent", // This could be derived from description or set manually
-        description: agentDetails[6], // description
+        id: "0",
+        name: "AAVE Agent",
+        description: agentDetails[6],
         category: "DeFi",
-        creationDate: new Date().toISOString().split("T")[0], // Current date as fallback
-        walletAddress: agentDetails[0], // owner address
-        executionFees: agentDetails[1], // This is already a bigint
-        avsPlugin: avsPolicyData?.name || "", // Use AVS policy name if available
-        totalTxExecuted: "0", // Default value
-        lastTxHash: "", // Default value
-        agentLocation: agentDetails[5], // agentLocation
-        dockerfileHash: agentDetails[4], // agentDockerfileHash
+        creationDate: new Date().toISOString().split("T")[0],
+        walletAddress: agentDetails[0],
+        executionFees: agentDetails[1],
+        avsPlugin: avsPolicyData?.name || "",
+        totalTxExecuted: agentTxCount,
+        lastTxHash: latestTxHash,
+        agentLocation: agentDetails[5],
+        dockerfileHash: agentDetails[4],
       }
     : {
         id: "0",
@@ -252,7 +370,7 @@ export default function Home() {
         walletAddress: "",
         executionFees: BigInt(0),
         avsPlugin: "",
-        totalTxExecuted: "",
+        totalTxExecuted: "0",
         lastTxHash: "",
         agentLocation: "",
         dockerfileHash: "",
@@ -429,8 +547,6 @@ export default function Home() {
   // Watch for transaction hash in batchTxData
   useEffect(() => {
     if (batchTxData?.transactionHash && !hasShownTxSuccess) {
-      console.log("Transaction hash:", batchTxData.transactionHash);
-
       // Wait 3 seconds before showing success
       setTimeout(() => {
         toast.success(
@@ -831,17 +947,17 @@ export default function Home() {
                           AVS Plugin:
                         </span>
                         <span className="ml-2 text-yellow-900">
-                          {avsDetails?.name || ""}
+                          {avsPolicyData?.name || "AAVE Complete AVS Plugin"}
                         </span>
                       </Card>
-                      {avsDetails && (
+                      {avsPolicyData && (
                         <>
                           <Card className="border border-dashed border-yellow-200">
                             <span className="text-white font-bold">
                               AVS Policy Description:
                             </span>
                             <span className="ml-2 text-yellow-200">
-                              {avsDetails?.description || ""}
+                              {avsPolicyData?.description || ""}
                             </span>
                           </Card>
                           <Card className="border border-dashed border-yellow-200">
@@ -850,12 +966,12 @@ export default function Home() {
                             </span>
                             <span
                               className={`ml-2 ${
-                                avsDetails?.isActive
+                                avsPolicyData?.isActive
                                   ? "text-green-400"
                                   : "text-red-400"
                               }`}
                             >
-                              {avsDetails?.isActive ? "Active" : "Inactive"}
+                              {avsPolicyData?.isActive ? "Active" : "Inactive"}
                             </span>
                           </Card>
                           <Card className="border border-dashed border-yellow-200">
@@ -863,12 +979,12 @@ export default function Home() {
                               AVS Policy Creator:
                             </span>
                             <a
-                              href={`https://sepolia.scrollscan.com/address/${avsDetails?.creator}`}
+                              href={`https://sepolia.scrollscan.com/address/${avsPolicyData?.creator}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="ml-2 text-yellow-200 hover:underline break-all"
                             >
-                              {avsDetails?.creator || ""}
+                              {avsPolicyData?.creator || ""}
                             </a>
                           </Card>
 
@@ -892,11 +1008,11 @@ export default function Home() {
                                     When Condition
                                   </h4>
                                   <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
-                                    {JSON.stringify(
-                                      avsDetails?.whenCondition,
-                                      null,
-                                      2
-                                    ) || "0.0"}
+                                    {`Start Time: ${
+                                      avsPolicyData?.whenCondition?.startTime ||
+                                      "0"
+                                    }
+End Time: ${avsPolicyData?.whenCondition?.endTime || "0"}`}
                                   </pre>
                                 </div>
 
@@ -906,11 +1022,12 @@ export default function Home() {
                                     How Condition
                                   </h4>
                                   <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
-                                    {JSON.stringify(
-                                      avsDetails?.howCondition,
+                                    {`Allowed Functions: ${JSON.stringify(
+                                      avsPolicyData?.howCondition
+                                        ?.allowedFunctions || [],
                                       null,
                                       2
-                                    )}
+                                    )}`}
                                   </pre>
                                 </div>
 
@@ -920,11 +1037,12 @@ export default function Home() {
                                     What Condition
                                   </h4>
                                   <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
-                                    {JSON.stringify(
-                                      avsDetails?.whatCondition,
+                                    {`Allowed Contracts: ${JSON.stringify(
+                                      avsPolicyData?.whatCondition
+                                        ?.allowedContracts || [],
                                       null,
                                       2
-                                    )}
+                                    )}`}
                                   </pre>
                                 </div>
                               </div>
@@ -937,18 +1055,26 @@ export default function Home() {
                           Total tx executed:
                         </span>
                         <span className="ml-2 text-yellow-200">
-                          {displayAgentData.totalTxExecuted}
+                          {agentTxCount}
                         </span>
                       </Card>
-                      <Card className="border border-dashed border-yellow-200">
+                      {/* <Card className="border border-dashed border-yellow-200">
                         <span className="text-white">Hash of past tx:</span>
-                        <a
-                          href="#"
-                          className="ml-2 text-blue-400 hover:underline"
-                        >
-                          {displayAgentData.lastTxHash || "No transactions yet"}
-                        </a>
-                      </Card>
+                        {latestTxHash ? (
+                          <a
+                            href={`https://sepolia.scrollscan.com/tx/${latestTxHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 text-yellow-200 hover:underline break-all"
+                          >
+                            {latestTxHash}
+                          </a>
+                        ) : (
+                          <span className="ml-2 text-gray-400">
+                            No transactions yet
+                          </span>
+                        )}
+                      </Card> */}
                       {displayAgentData.dockerfileHash && (
                         <Card className="border border-dashed border-yellow-200">
                           <span className="text-white font-bold">
