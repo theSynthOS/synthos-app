@@ -6,10 +6,19 @@ import { fetchAgentLogs } from "../services/aiAgent";
 import Modal from "../components/detailModal";
 import { motion } from "framer-motion";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
-import { getContract } from "thirdweb";
-import { useReadContract } from "thirdweb/react";
+import { getContract, prepareContractCall } from "thirdweb";
+import {
+  useActiveAccount,
+  useReadContract,
+  TransactionButton,
+  useWalletBalance,
+} from "thirdweb/react";
 import { scrollSepolia } from "@/client";
 import { client } from "@/client";
+import { isLoggedIn } from "../actions/login";
+import confetti from "canvas-confetti";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 interface AgentLog {
   id: string;
@@ -26,13 +35,23 @@ interface AgentData {
   category: string;
   creationDate: string;
   walletAddress: string;
-  executionFees: string;
+  executionFees: bigint;
   avsPlugin: string;
   totalTxExecuted: string;
   lastTxHash: string;
   dockerfileHash?: string;
   agentLocation?: string;
 }
+
+const faucet = getContract({
+  address: "0x602396FFA43b7FfAdc80e01c5A11fc74F3BA59f5",
+  chain: scrollSepolia,
+  client: client,
+});
+
+const formatWeiToEth = (wei: bigint): string => {
+  return (Number(wei) / 1e18).toFixed(3) + " ETH";
+};
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"info" | "logs">("info");
@@ -42,13 +61,39 @@ export default function Home() {
   const [agentLogs, setAgentLogs] = useState<AgentLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const account = useActiveAccount();
+
+  // Get wallet balance
+  const { data: balance } = useWalletBalance({
+    address: account?.address,
+    chain: scrollSepolia,
+    client,
+  });
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const loggedIn = await isLoggedIn();
+      setIsAuthenticated(loggedIn);
+    };
+    checkAuth();
+  }, []);
+
+  // Add new effect to watch for account changes
+  useEffect(() => {
+    if (account) {
+      setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
+    }
+  }, [account]);
 
   useEffect(() => {
     if (showModal) {
       // Initial load of logs
       loadAVSLogs();
-      
+
       // Set up polling for logs every 10 seconds when modal is open and logs tab is active
       const refreshInterval = setInterval(() => {
         if (activeTab === "logs") {
@@ -56,7 +101,7 @@ export default function Home() {
           loadAVSLogs(false);
         }
       }, 10000); // Poll every 10 seconds
-      
+
       // Clean up interval when modal closes
       return () => clearInterval(refreshInterval);
     }
@@ -65,20 +110,21 @@ export default function Home() {
   const loadAVSLogs = async (scrollToBottom = false) => {
     setIsLoadingLogs(true);
     setLogError(null);
-    
+
     try {
       const logs = await fetchAgentLogs();
-      
+
       console.log("AVS Logs received:", logs);
-      
+
       if (logs && logs.length > 0) {
         // Sort logs by timestamp (newest first)
-        const sortedLogs = [...logs].sort((a, b) => 
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        const sortedLogs = [...logs].sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
         setAgentLogs(sortedLogs);
         setLogError(null);
-        
+
         // Only scroll to bottom if explicitly requested
         if (scrollToBottom && logsEndRef.current) {
           setTimeout(() => {
@@ -101,20 +147,21 @@ export default function Home() {
   // Handle new logs from SSE
   const handleNewLogs = (newLogs: AgentLog[]) => {
     console.log("New SSE logs received:", newLogs);
-    
-    setAgentLogs(prevLogs => {
+
+    setAgentLogs((prevLogs) => {
       // Combine new logs with existing logs
       const combinedLogs = [...newLogs, ...prevLogs];
-      
+
       // Sort logs by timestamp (newest first)
-      const sortedLogs = combinedLogs.sort((a, b) => 
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      const sortedLogs = combinedLogs.sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
-      
+
       // Limit to 100 logs to prevent performance issues
       return sortedLogs.slice(0, 100);
     });
-    
+
     // Clear any error message
     setLogError(null);
   };
@@ -145,32 +192,36 @@ export default function Home() {
     if (log.metadata?.stackTrace) {
       return (
         <div>
-          <p className="text-yellow-400 text-sm font-semibold mb-2">{log.message}</p>
+          <p className="text-yellow-400 text-sm font-semibold mb-2">
+            {log.message}
+          </p>
           <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
             {log.metadata.stackTrace}
           </pre>
         </div>
       );
     }
-    
+
     // Handle messages that look like stack traces
-    if (log.message.includes('at ') && log.message.includes('file://')) {
-      const lines = log.message.split('\n');
+    if (log.message.includes("at ") && log.message.includes("file://")) {
+      const lines = log.message.split("\n");
       const mainMessage = lines[0];
-      const stackTrace = lines.slice(1).join('\n');
-      
+      const stackTrace = lines.slice(1).join("\n");
+
       return (
         <div>
-          <p className="text-yellow-400 text-sm font-semibold mb-2">{mainMessage}</p>
+          <p className="text-yellow-400 text-sm font-semibold mb-2">
+            {mainMessage}
+          </p>
           <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
             {stackTrace}
           </pre>
         </div>
       );
     }
-    
+
     // Handle JSON messages
-    if (log.message.startsWith('{') && log.message.endsWith('}')) {
+    if (log.message.startsWith("{") && log.message.endsWith("}")) {
       try {
         const jsonData = JSON.parse(log.message);
         return (
@@ -182,17 +233,19 @@ export default function Home() {
         // Not valid JSON, continue with regular message
       }
     }
-    
+
     // Regular message
-    return <p className="text-white text-sm whitespace-pre-wrap">{log.message}</p>;
+    return (
+      <p className="text-white text-sm whitespace-pre-wrap">{log.message}</p>
+    );
   };
 
   // Contract read
   const contract = getContract({
     client,
     address: "0x6ed02Bf56bEB79D47F734eE6BB4701B9789b4D5b",
-    chain: scrollSepolia
-  })
+    chain: scrollSepolia,
+  });
 
   // First get the agent hash by ID
   const { data: agentHash, isLoading: isAgentHashLoading } = useReadContract({
@@ -202,91 +255,192 @@ export default function Home() {
   });
 
   // Then use the hash to get agent details - use empty string if hash not available yet
-  const { data: agentDetails, isLoading: isAgentDetailsLoading } = useReadContract({
-    contract,
-    method: "function getAgent(string memory dockerfileHash) returns (address owner, uint256 executionFee, uint256[] memory policyIds, bool isRegistered, string memory agentDockerfileHash, string memory agentLocation, string memory description, uint8 category)",
-    params: [agentHash || ""],
-  });
-
-  // console.log("Agent Hash:", agentHash);
-  // console.log("Agent Details:", agentDetails);
+  const { data: agentDetails, isLoading: isAgentDetailsLoading } =
+    useReadContract({
+      contract,
+      method:
+        "function getAgent(string memory dockerfileHash) returns (address owner, uint256 executionFee, uint256[] memory policyIds, bool isRegistered, string memory agentDockerfileHash, string memory agentLocation, string memory description, uint8 category)",
+      params: [agentHash || ""],
+    });
 
   // Extract agent data from contract if available
-  const contractAgentData: AgentData = agentDetails ? {
-    id: "0", // Using the ID we queried with
-    name: "AAVE Agent", // This could be derived from description or set manually
-    description: agentDetails[6], // description
-    category: "DeFi",
-    creationDate: new Date().toISOString().split('T')[0], // Current date as fallback
-    walletAddress: agentDetails[0], // owner address
-    executionFees: (Number(agentDetails[1]) / 1e18) + " ETH", // Convert wei to ETH
-    avsPlugin: "Scroll", // Default value
-    totalTxExecuted: "0", // Default value
-    lastTxHash: "", // Default value
-    agentLocation: agentDetails[5], // agentLocation
-    dockerfileHash: agentDetails[4], // agentDockerfileHash
-  } : {
-    id: "0",
-    name: "Loading...",
-    description: "Loading agent data...",
-    category: "Unknown",
-    creationDate: "",
-    walletAddress: "",
-    executionFees: "",
-    avsPlugin: "",
-    totalTxExecuted: "",
-    lastTxHash: "",
-    agentLocation: "",
-    dockerfileHash: ""
-  };
+  const contractAgentData: AgentData = agentDetails
+    ? {
+        id: "0", // Using the ID we queried with
+        name: "AAVE Agent", // This could be derived from description or set manually
+        description: agentDetails[6], // description
+        category: "DeFi",
+        creationDate: new Date().toISOString().split("T")[0], // Current date as fallback
+        walletAddress: agentDetails[0], // owner address
+        executionFees: agentDetails[1],
+        avsPlugin: "Scroll", // Default value
+        totalTxExecuted: "0", // Default value
+        lastTxHash: "", // Default value
+        agentLocation: agentDetails[5], // agentLocation
+        dockerfileHash: agentDetails[4], // agentDockerfileHash
+      }
+    : {
+        id: "0",
+        name: "Loading...",
+        description: "Loading agent data...",
+        category: "Unknown",
+        creationDate: "",
+        walletAddress: "",
+        executionFees: BigInt(0),
+        avsPlugin: "",
+        totalTxExecuted: "",
+        lastTxHash: "",
+        agentLocation: "",
+        dockerfileHash: "",
+      };
 
   // Use the real data
   const displayAgentData: AgentData = contractAgentData;
-  
+
   // Loading state for agent data
   const isLoadingAgentData = isAgentHashLoading || isAgentDetailsLoading;
 
+  // If not authenticated, show sign-in prompt
+  if (!isAuthenticated) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center space-grotesk relative">
+        <motion.div style={{ opacity: 1 }} className="absolute inset-0">
+          <BackgroundGradientAnimation containerClassName="absolute inset-0 z-0" />
+        </motion.div>
+
+        <div className="relative z-10 text-center p-8 bg-white/5 backdrop-blur-sm rounded-lg border border-gray-700">
+          <h1 className="text-2xl md:text-4xl font-bold mb-6 text-yellow-500">
+            Scroll&apos;s #1 Verifiable DeFAI Agent Marketplace
+          </h1>
+          <p className="text-yellow-200 text-lg">
+            <div className="animate-pulse bg-yellow-500/20 rounded-lg px-4 py-2 inline-block">
+              Sign in to get started<span className="ml-2">🤖</span>
+            </div>
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main
-      className={`min-h-screen flex flex-col space-grotesk relative`}
-    >
-      <motion.div 
-        style={{ opacity:1 }} 
-        className="absolute inset-0 "
-      >
+    <main className={`min-h-screen flex flex-col space-grotesk relative`}>
+      <motion.div style={{ opacity: 1 }} className="absolute inset-0">
         <BackgroundGradientAnimation containerClassName="absolute inset-0 z-0" />
       </motion.div>
-      
+
       {/* Banner Area */}
-      <div className="relative z-10 pt-[76px] md:pt-[86px] flex flex-col items-center justify-center min-h-[40vh] bg-white/5 backdrop-blur-sm  ">
+      <div className="relative z-10 pt-[76px] md:pt-[86px] flex flex-col items-center justify-center min-h-[40vh] bg-white/5 backdrop-blur-sm">
         <div className="w-full text-center">
-          <h1 className="text-xl md:text-4xl font-bold mb-2 text-yellow-500 pt-5">Verifiable DeFAI Agent Marketplace on Scroll</h1>
-          <p className="text-yellow-200 text-lg md:text-2xl font-medium">Discover, deploy, and manage AI agents</p>
+          <div className="flex justify-end px-4 mb-4"></div>
+          <h1 className="text-xl md:text-4xl font-bold mb-4 text-yellow-500 pt-5">
+            Verifiable DeFAI Agent Marketplace on Scroll
+          </h1>
+          <p className="text-yellow-200 text-lg mb-4 md:text-2xl font-medium">
+            Discover, deploy, and manage AI agents
+          </p>
           <div className="flex justify-center items-center gap-8">
             <CustomButton
               onClick={() => setShowComingSoonModal(true)}
-              className="mt-4 px-8 py-2"
+              className="mt-4 px-8 py-2 text-xl"
             >
               Create Agent
             </CustomButton>
 
             <CustomButton
-              onClick={() => window.open("https://www.notion.so/SynthOS-Automate-Your-Gains-19618bd263f08027993cfa6c5618941d", "_blank")}
-              className="mt-4 px-8 py-2"
+              onClick={() =>
+                window.open(
+                  "https://www.notion.so/SynthOS-Automate-Your-Gains-19618bd263f08027993cfa6c5618941d",
+                  "_blank"
+                )
+              }
+              className="mt-4 px-8 py-2 text-xl"
             >
               Documentation
             </CustomButton>
           </div>
         </div>
       </div>
-      
+
       {/* Feature Agent Area */}
       <div className="relative z-10 px-4 md:px-8 py-6 w-full">
-        <h1 className="text-2xl md:text-4xl font-bold mb-6 md:mb-8 text-yellow-400">Featured Agents</h1>
-        
+        <div className="bg-white/5 backdrop-blur-sm border border-gray-700 rounded-lg p-4 md:p-6 mb-6">
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="text-2xl md:text-4xl font-bold text-yellow-400">
+              Featured Agents
+            </h1>
+            <div className="flex items-center gap-2">
+              <TransactionButton
+                className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+                transaction={() =>
+                  prepareContractCall({
+                    contract: faucet,
+                    method: "function requestDrip()",
+                    params: [],
+                  })
+                }
+                onClick={() => {
+                  toast.info("Preparing transaction...", {
+                    position: "bottom-right",
+                    autoClose: 3000,
+                  });
+                }}
+                onTransactionSent={(tx) => {
+                  toast.success(
+                    "Transaction sent! Waiting for confirmation...",
+                    {
+                      position: "bottom-right",
+                      autoClose: 5000,
+                    }
+                  );
+                }}
+                onTransactionConfirmed={(receipt) => {
+                  toast.success(
+                    "🎉 Transaction confirmed! Funds claimed successfully!",
+                    {
+                      position: "bottom-right",
+                      autoClose: 5000,
+                    }
+                  );
+                  // Trigger confetti
+                  confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 },
+                  });
+                }}
+                onError={(error) => {
+                  const cleanErrorMessage = error.message
+                    .split("contract:")[0]
+                    .trim();
+                  toast.error(cleanErrorMessage, {
+                    position: "bottom-right",
+                    autoClose: 5000,
+                  });
+                }}
+              >
+                Claim Test Funds
+              </TransactionButton>
+            </div>
+          </div>
+        </div>
+
+        {/* Add ToastContainer for notifications */}
+        <ToastContainer
+          position="bottom-right"
+          autoClose={5000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="dark"
+        />
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full">
           {/* Agent Card */}
-          <div 
+          <div
             className="bg-white/5 backdrop-blur-sm border border-gray-700 rounded-lg p-4 md:p-6 cursor-pointer hover:border-yellow-500 transition-colors"
             onClick={() => setShowModal(true)}
           >
@@ -296,34 +450,47 @@ export default function Home() {
               </div>
             ) : (
               <>
-                <h2 className="text-xl md:text-2xl font-bold text-white mb-2 md:mb-3">{displayAgentData.name}</h2>
-                <p className="text-gray-300 mb-3 md:mb-4 text-sm md:text-base">{displayAgentData.description}</p>
-                
+                <h2 className="text-xl md:text-2xl font-bold text-white mb-2 md:mb-3">
+                  {displayAgentData.name}
+                </h2>
+                <p className="text-gray-300 mb-3 md:mb-4 text-sm md:text-base">
+                  {displayAgentData.description}
+                </p>
+
                 <div className="mb-3 md:mb-4 text-sm md:text-base">
                   <span className="text-gray-400">Execution Fee:</span>
-                  <span className="ml-2 text-white">{displayAgentData.executionFees}</span>
+                  <span className="ml-2 text-white">
+                    {formatWeiToEth(displayAgentData.executionFees)}
+                  </span>
                 </div>
-                
+
                 <div className="text-xs md:text-sm text-gray-400 mt-2 md:mt-4">
-                  Powered by <a href="#" className="text-blue-400 hover:underline">Autonome</a>
+                  Powered by{" "}
+                  <a href="#" className="text-blue-400 hover:underline">
+                    Autonome
+                  </a>
                 </div>
               </>
             )}
           </div>
-          
+
           {/* Add Your Agent Card */}
-          <div 
+          <div
             className="bg-white/5 backdrop-blur-sm border border-dashed border-gray-700 rounded-lg p-4 md:p-6 flex items-center justify-center hover:border-green-500 transition-colors cursor-pointer"
             onClick={() => setShowComingSoonModal(true)}
           >
             <div className="text-center">
-              <h2 className="text-xl md:text-2xl font-bold text-gray-400 mb-1 md:mb-2 ">Create Agent</h2>
-              <p className="text-gray-500 text-sm md:text-base">Create a new agent</p>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-400 mb-1 md:mb-2 ">
+                Create Agent
+              </h2>
+              <p className="text-gray-500 text-sm md:text-base">
+                Create a new agent
+              </p>
             </div>
           </div>
         </div>
       </div>
-      
+
       {/* Modal with Agent Details and Chat */}
       {showModal && (
         <Modal
@@ -335,14 +502,22 @@ export default function Home() {
             <div className="md:w-1/2 flex flex-col h-full">
               {/* Tabs */}
               <div className="flex border-b border-gray-700 mb-4">
-                <button 
-                  className={`px-4 py-2 font-medium ${activeTab === "info" ? "text-yellow-200 border-b-2 border-yellow-200" : "text-gray-400 hover:text-gray-200"}`}
+                <button
+                  className={`px-4 py-2 font-medium ${
+                    activeTab === "info"
+                      ? "text-yellow-200 border-b-2 border-yellow-200"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
                   onClick={() => setActiveTab("info")}
                 >
                   Info
                 </button>
-                <button 
-                  className={`px-4 py-2 font-medium ${activeTab === "logs" ? "text-yellow-200 border-b-2 border-yellow-200" : "text-gray-400 hover:text-gray-200"}`}
+                <button
+                  className={`px-4 py-2 font-medium ${
+                    activeTab === "logs"
+                      ? "text-yellow-200 border-b-2 border-yellow-200"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
                   onClick={() => setActiveTab("logs")}
                 >
                   AVS Logs
@@ -353,48 +528,87 @@ export default function Home() {
               <div className="flex-1 overflow-auto">
                 {activeTab === "info" ? (
                   <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-white">{displayAgentData.name}</h2>
-                    <p className="text-gray-300">{displayAgentData.description}</p>
-                    
+                    <h2 className="text-2xl font-bold text-white">
+                      {displayAgentData.name}
+                    </h2>
+                    <p className="text-gray-300">
+                      {displayAgentData.description}
+                    </p>
+
                     <div className="mt-6 space-y-3">
                       <div>
                         <span className="text-gray-400">Category:</span>
-                        <span className="ml-2 text-white">{displayAgentData.category}</span>
+                        <span className="ml-2 text-white">
+                          {displayAgentData.category}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-gray-400">Agent Creation Date:</span>
-                        <a href="#" className="ml-2 text-blue-400 hover:underline">{displayAgentData.creationDate}</a>
+                        <span className="text-gray-400">
+                          Agent Creation Date:
+                        </span>
+                        <a
+                          href="#"
+                          className="ml-2 text-blue-400 hover:underline"
+                        >
+                          {displayAgentData.creationDate}
+                        </a>
                       </div>
                       <div>
                         <span className="text-gray-400">Wallet Address:</span>
-                        <span className="ml-2 text-white">{displayAgentData.walletAddress}</span>
+                        <span className="ml-2 text-white">
+                          {displayAgentData.walletAddress}
+                        </span>
                       </div>
                       <div>
                         <span className="text-gray-400">Execution Fees:</span>
-                        <span className="ml-2 text-white">{displayAgentData.executionFees}</span>
+                        <span className="ml-2 text-white">
+                          {formatWeiToEth(displayAgentData.executionFees)}
+                        </span>
                       </div>
                       <div>
                         <span className="text-gray-400">AVS Plugin:</span>
-                        <span className="ml-2 text-white">{displayAgentData.avsPlugin}</span>
+                        <span className="ml-2 text-white">
+                          {displayAgentData.avsPlugin}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-gray-400">Total tx executed:</span>
-                        <span className="ml-2 text-white">{displayAgentData.totalTxExecuted}</span>
+                        <span className="text-gray-400">
+                          Total tx executed:
+                        </span>
+                        <span className="ml-2 text-white">
+                          {displayAgentData.totalTxExecuted}
+                        </span>
                       </div>
                       <div>
                         <span className="text-gray-400">Hash of past tx:</span>
-                        <a href="#" className="ml-2 text-blue-400 hover:underline">{displayAgentData.lastTxHash}</a>
+                        <a
+                          href="#"
+                          className="ml-2 text-blue-400 hover:underline"
+                        >
+                          {displayAgentData.lastTxHash}
+                        </a>
                       </div>
                       {displayAgentData.dockerfileHash && (
                         <div>
-                          <span className="text-gray-400">Dockerfile Hash:</span>
-                          <span className="ml-2 text-white break-all">{displayAgentData.dockerfileHash}</span>
+                          <span className="text-gray-400">
+                            Dockerfile Hash:
+                          </span>
+                          <span className="ml-2 text-white break-all">
+                            {displayAgentData.dockerfileHash}
+                          </span>
                         </div>
                       )}
                       {displayAgentData.agentLocation && (
                         <div>
                           <span className="text-gray-400">Agent Location:</span>
-                          <a href={displayAgentData.agentLocation} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-400 hover:underline break-all">{displayAgentData.agentLocation}</a>
+                          <a
+                            href={displayAgentData.agentLocation}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 text-blue-400 hover:underline break-all"
+                          >
+                            {displayAgentData.agentLocation}
+                          </a>
                         </div>
                       )}
                       <div className="md:hidden mt-4">
@@ -412,17 +626,19 @@ export default function Home() {
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-xl font-bold text-white">AVS Logs</h3>
                       <div className="flex space-x-2">
-                        <button 
+                        <button
                           onClick={() => {
                             if (logsEndRef.current) {
-                              logsEndRef.current.scrollIntoView({ behavior: "smooth" });
+                              logsEndRef.current.scrollIntoView({
+                                behavior: "smooth",
+                              });
                             }
                           }}
                           className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm"
                         >
                           Scroll to Bottom
                         </button>
-                        <button 
+                        <button
                           onClick={() => loadAVSLogs(true)}
                           className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
                           disabled={isLoadingLogs}
@@ -431,7 +647,7 @@ export default function Home() {
                         </button>
                       </div>
                     </div>
-                    
+
                     {isLoadingLogs ? (
                       <div className="text-center py-4">
                         <p className="text-gray-400">Loading logs...</p>
@@ -447,10 +663,25 @@ export default function Home() {
                     ) : (
                       <div className="space-y-3">
                         {agentLogs.map((log) => (
-                          <div key={log.id} className="bg-[#0f0f3d] p-3 rounded border border-[#1a1a4a]">
+                          <div
+                            key={log.id}
+                            className="bg-[#0f0f3d] p-3 rounded border border-[#1a1a4a]"
+                          >
                             <div className="flex justify-between text-xs mb-2">
-                              <span className="text-gray-400">{formatTimestamp(log.timestamp)}</span>
-                              <span className={`font-medium px-2 py-0.5 rounded-full text-xs ${getLevelColor(log.level)} bg-opacity-20 ${log.level.toLowerCase() === 'error' ? 'bg-red-900' : log.level.toLowerCase() === 'warn' ? 'bg-yellow-900' : 'bg-blue-900'}`}>
+                              <span className="text-gray-400">
+                                {formatTimestamp(log.timestamp)}
+                              </span>
+                              <span
+                                className={`font-medium px-2 py-0.5 rounded-full text-xs ${getLevelColor(
+                                  log.level
+                                )} bg-opacity-20 ${
+                                  log.level.toLowerCase() === "error"
+                                    ? "bg-red-900"
+                                    : log.level.toLowerCase() === "warn"
+                                    ? "bg-yellow-900"
+                                    : "bg-blue-900"
+                                }`}
+                              >
                                 {log.level.toUpperCase()}
                               </span>
                             </div>
@@ -467,10 +698,11 @@ export default function Home() {
 
             {/* Right Panel - Chatbot (Desktop only) */}
             <div className="hidden md:block md:w-1/2 h-full">
-              <ChatbotCard 
+              <ChatbotCard
                 agentId={displayAgentData.id}
                 agentName={displayAgentData.name}
-                title={`Chat with ${displayAgentData.name}`}
+                executionFees={displayAgentData.executionFees}
+                creatorAddress={displayAgentData.walletAddress}
               />
             </div>
           </div>
@@ -484,10 +716,11 @@ export default function Home() {
           title={`Chat with ${displayAgentData.name}`}
         >
           <div className="h-[70vh]">
-            <ChatbotCard 
+            <ChatbotCard
               agentId={displayAgentData.id}
               agentName={displayAgentData.name}
-              title={`Chat with ${displayAgentData.name}`}
+              executionFees={displayAgentData.executionFees}
+              creatorAddress={displayAgentData.walletAddress}
             />
           </div>
         </Modal>
@@ -496,18 +729,24 @@ export default function Home() {
       {/* Coming Soon Modal */}
       {showComingSoonModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowComingSoonModal(false)}></div>
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowComingSoonModal(false)}
+          ></div>
           <div className="bg-[#1a1a4a] p-8 rounded-lg text-center max-w-md relative z-10">
-            <button 
+            <button
               onClick={() => setShowComingSoonModal(false)}
               className="absolute top-2 right-2 text-gray-400 hover:text-white"
             >
               ✕
             </button>
-            <h2 className="text-2xl font-bold text-yellow-200 mb-4">Upcoming in V2</h2>
+            <h2 className="text-2xl font-bold text-yellow-200 mb-4">
+              Upcoming in V2
+            </h2>
             <p className="text-gray-200 mb-6">
-              We&apos;re working hard to bring you the ability to create and deploy your own agents.
-              This feature will be available in our next major release.
+              We&apos;re working hard to bring you the ability to create and
+              deploy your own agents. This feature will be available in our next
+              major release.
             </p>
             <p className="text-gray-300 mb-8">
               Stay tuned for updates and be the first to know when it launches!
