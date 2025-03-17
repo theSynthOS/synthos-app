@@ -6,13 +6,15 @@ import { fetchAgentLogs } from "../services/aiAgent";
 import Modal from "../components/detailModal";
 import { motion } from "framer-motion";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
-import { getContract, prepareContractCall } from "thirdweb";
+import { getContract, prepareContractCall, prepareTransaction } from "thirdweb";
 import {
   useActiveAccount,
   useReadContract,
   TransactionButton,
   useWalletBalance,
+  useSendBatchTransaction,
 } from "thirdweb/react";
+import { getWalletBalance } from "thirdweb/wallets";
 import { scrollSepolia } from "@/client";
 import { client } from "@/client";
 import { isLoggedIn } from "../actions/login";
@@ -21,6 +23,8 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Card from "@/components/card/page";
 import Footer from "@/components/footer/page";
+import { policyRegistryABI } from "@/utils/abi/policyRegistryABI";
+import { type Abi } from "thirdweb/utils";
 
 interface AgentLog {
   id: string;
@@ -77,6 +81,18 @@ export default function Home() {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [showConditions, setShowConditions] = useState(false);
   const account = useActiveAccount();
+  const { mutate: sendBatchTransaction, data: batchTxData } =
+    useSendBatchTransaction();
+  const [isTxProcessing, setIsTxProcessing] = useState(false);
+  const [hasShownTxSuccess, setHasShownTxSuccess] = useState(false);
+  const [showTokenBalances, setShowTokenBalances] = useState(false);
+  const [tokenBalances, setTokenBalances] = useState<{
+    USDC: string;
+    DAI: string;
+  }>({
+    USDC: "0",
+    DAI: "0",
+  });
 
   // Get wallet balance
   const { data: balance } = useWalletBalance({
@@ -106,10 +122,10 @@ export default function Home() {
     if (showModal && activeTab === "logs") {
       // Initial load of logs
       loadAVSLogs();
-      
+
       // Set up SSE connection for real-time logs
       const eventSource = setupLogStream();
-      
+
       // Clean up SSE connection when component unmounts or tab changes
       return () => {
         if (eventSource) {
@@ -124,15 +140,16 @@ export default function Home() {
   const contract = getContract({
     client,
     address: "0x6ed02Bf56bEB79D47F734eE6BB4701B9789b4D5b",
-    chain: scrollSepolia
-  })
+    chain: scrollSepolia,
+  });
 
-// Contract read AVS 
-const avsContract = getContract({
-  client,
-  address: "0xa7B0446a0Fa8e8c503774987931E071E3DdF271A",
-  chain: scrollSepolia
-})
+  // Contract read AVS
+  const avsContract = getContract({
+    client,
+    address: "0x3579D1B3606d7401A524F78ba8565374639348Fd",
+    chain: scrollSepolia,
+    abi: policyRegistryABI as Abi,
+  });
 
   // First get the agent hash by ID
   const { data: agentHash, isLoading: isAgentHashLoading } = useReadContract({
@@ -142,11 +159,13 @@ const avsContract = getContract({
   });
 
   // Then use the hash to get agent details - use empty string if hash not available yet
-  const { data: agentDetails, isLoading: isAgentDetailsLoading } = useReadContract({
-    contract,
-    method: "function getAgent(string memory dockerfileHash) returns (address owner, uint256 executionFee, uint256[] memory policyIds, bool isRegistered, string memory agentDockerfileHash, string memory agentLocation, string memory description, uint8 category)",
-    params: [agentHash || ""],
-  });
+  const { data: agentDetails, isLoading: isAgentDetailsLoading } =
+    useReadContract({
+      contract,
+      method:
+        "function getAgent(string memory dockerfileHash) returns (address owner, uint256 executionFee, uint256[] memory policyIds, bool isRegistered, string memory agentDockerfileHash, string memory agentLocation, string memory description, uint8 category)",
+      params: [agentHash || ""],
+    });
 
   // Log the agent details and policy ID for debugging
   useEffect(() => {
@@ -156,109 +175,134 @@ const avsContract = getContract({
     }
   }, [agentDetails]);
 
-  // Contract read AVS details - use the correct method signature
+  // Contract read AVS details
+  //@ts-ignore
   const { data: avsDetails, isLoading: isAVSLoading } = useReadContract({
     contract: avsContract,
-    method: "getPolicyMetadata(uint256)",
-    params: [BigInt(1)]
-  });
-console.log("AVS Details:", avsDetails);
+    method: "getPolicyMetadata",
+    params: [BigInt(1)],
+  }) as {
+    data:
+      | {
+          name: string;
+          description: string;
+          whenCondition: { startTime: bigint; endTime: bigint };
+          howCondition: { allowedFunctions: `0x${string}`[] };
+          whatCondition: { allowedContracts: `0x${string}`[] };
+          isActive: boolean;
+          creator: `0x${string}`;
+        }
+      | undefined;
+    isLoading: boolean;
+  };
+
+  console.log("AVS Details:", avsDetails);
 
   // Mock AVS policy data to use when real data is not available
   const mockAVSPolicyData: AVSPolicyData = {
     name: "AAVE Complete AVS Plugin",
-    description: "This plugin allows for the supply, borrow, repay, withdraw and deposit actions to be done for the Scroll AAVE Market",
+    description:
+      "This plugin allows for the supply, borrow, repay, withdraw and deposit actions to be done for the Scroll AAVE Market",
     whenCondition: "0.0",
     howCondition: "0x7b2270726f746f636f6c223a224141564522",
-    whatCondition: "0x7b2261637469766974696573223a5b227375707073796c79222c22626f72726f77222c227265706179222c2277697468647261772c2264657073697422225d7d",
+    whatCondition:
+      "0x7b2261637469766974696573223a5b227375707073796c79222c22626f72726f77222c227265706179222c2277697468647261772c2264657073697422225d7d",
     isActive: true,
-    creator: "0x1234567890123456789012345678901234567890"
+    creator: "0x1234567890123456789012345678901234567890",
   };
 
   // Get the AVS policy data with fallback to mock data
-  const avsPolicyData: AVSPolicyData | null = avsDetails ? {
-    name: avsDetails[0] as string || "",
-    description: avsDetails[1] as string || "",
-    whenCondition: avsDetails[2] || "",
-    howCondition: avsDetails[3] || "",
-    whatCondition: avsDetails[4] || "",
-    isActive: avsDetails[5] as boolean || false,
-    creator: avsDetails[6] as string || ""
-  } : mockAVSPolicyData;
+  const avsPolicyData: AVSPolicyData | null =
+    avsDetails !== undefined
+      ? {
+          name: avsDetails?.name,
+          description: avsDetails?.description,
+          whenCondition: avsDetails?.whenCondition,
+          howCondition: avsDetails?.howCondition,
+          whatCondition: avsDetails?.whatCondition,
+          isActive: avsDetails?.isActive,
+          creator: avsDetails?.creator,
+        }
+      : mockAVSPolicyData;
+
+  console.log("AVS Policy Data:", avsPolicyData);
 
   // Extract agent data from contract if available
-  const contractAgentData: AgentData = agentDetails ? {
-    id: "0", // Using the ID we queried with
-    name: "AAVE Agent", // This could be derived from description or set manually
-    description: agentDetails[6], // description
-    category: "DeFi",
-    creationDate: new Date().toISOString().split('T')[0], // Current date as fallback
-    walletAddress: agentDetails[0], // owner address
-    executionFees: agentDetails[1], // This is already a bigint
-    avsPlugin: avsPolicyData?.name || "", // Use AVS policy name if available
-    totalTxExecuted: "0", // Default value
-    lastTxHash: "", // Default value
-    agentLocation: agentDetails[5], // agentLocation
-    dockerfileHash: agentDetails[4], // agentDockerfileHash
-  } : {
-    id: "0",
-    name: "Loading...",
-    description: "Loading agent data...",
-    category: "Unknown",
-    creationDate: "",
-    walletAddress: "",
-    executionFees: BigInt(0),
-    avsPlugin: "",
-    totalTxExecuted: "",
-    lastTxHash: "",
-    agentLocation: "",
-    dockerfileHash: "",
-  };
+  const contractAgentData: AgentData = agentDetails
+    ? {
+        id: "0", // Using the ID we queried with
+        name: "AAVE Agent", // This could be derived from description or set manually
+        description: agentDetails[6], // description
+        category: "DeFi",
+        creationDate: new Date().toISOString().split("T")[0], // Current date as fallback
+        walletAddress: agentDetails[0], // owner address
+        executionFees: agentDetails[1], // This is already a bigint
+        avsPlugin: avsPolicyData?.name || "", // Use AVS policy name if available
+        totalTxExecuted: "0", // Default value
+        lastTxHash: "", // Default value
+        agentLocation: agentDetails[5], // agentLocation
+        dockerfileHash: agentDetails[4], // agentDockerfileHash
+      }
+    : {
+        id: "0",
+        name: "Loading...",
+        description: "Loading agent data...",
+        category: "Unknown",
+        creationDate: "",
+        walletAddress: "",
+        executionFees: BigInt(0),
+        avsPlugin: "",
+        totalTxExecuted: "",
+        lastTxHash: "",
+        agentLocation: "",
+        dockerfileHash: "",
+      };
 
   // Setup SSE connection for real-time logs
   const setupLogStream = () => {
-    if (typeof window === 'undefined') return null;
-    
+    if (typeof window === "undefined") return null;
+
     console.log("Setting up SSE connection for logs");
-    const eventSource = new EventSource('/api/agent-logs/stream');
-    
+    const eventSource = new EventSource("/api/agent-logs/stream");
+
     eventSource.onopen = () => {
       console.log("SSE connection opened");
       setIsLoadingLogs(false);
     };
-    
+
     eventSource.onmessage = (event) => {
       try {
         const logEntry = JSON.parse(event.data);
         console.log("SSE log received:", logEntry);
-        
+
         // Add the new log to the state
-        setAgentLogs(prevLogs => {
+        setAgentLogs((prevLogs) => {
           // Add the new log to the beginning of the array
           const newLogs = [logEntry, ...prevLogs];
-          
+
           // Sort logs by timestamp (newest first)
-          const sortedLogs = newLogs.sort((a, b) => 
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          const sortedLogs = newLogs.sort(
+            (a, b) =>
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           );
-          
+
           // Limit to 100 logs to prevent performance issues
           return sortedLogs.slice(0, 100);
         });
-        
+
         // Clear any error message
         setLogError(null);
       } catch (error) {
         console.error("Error parsing SSE log:", error);
       }
     };
-    
+
     eventSource.onerror = (error) => {
       console.error("SSE connection error:", error);
       setLogError("Error in log stream connection");
       eventSource.close();
     };
-    
+
     return eventSource;
   };
 
@@ -268,17 +312,17 @@ console.log("AVS Details:", avsDetails);
 
     try {
       const logs = await fetchAgentLogs();
-      
+
       if (logs && logs.length > 0) {
         // Sort logs by timestamp (newest first)
         const sortedLogs = [...logs].sort(
           (a, b) =>
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
-        
+
         // Limit to 50 logs to prevent performance issues
         const limitedLogs = sortedLogs.slice(0, 50);
-        
+
         setAgentLogs(limitedLogs);
         setLogError(null);
 
@@ -377,9 +421,86 @@ console.log("AVS Details:", avsDetails);
 
   // Use the real data
   const displayAgentData: AgentData = contractAgentData;
-  
+
   // Loading state for agent data
-  const isLoadingAgentData = isAgentHashLoading || isAgentDetailsLoading || isAVSLoading;
+  const isLoadingAgentData =
+    isAgentHashLoading || isAgentDetailsLoading || isAVSLoading;
+
+  // Watch for transaction hash in batchTxData
+  useEffect(() => {
+    if (batchTxData?.transactionHash && !hasShownTxSuccess) {
+      console.log("Transaction hash:", batchTxData.transactionHash);
+
+      // Wait 3 seconds before showing success
+      setTimeout(() => {
+        toast.success(
+          "🎉 Transaction confirmed! 0.01 ETH, 10 USDC, and 10,000 DAI claimed successfully!",
+          {
+            position: "bottom-right",
+            autoClose: 5000,
+          }
+        );
+
+        // Trigger confetti
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+        });
+
+        // Open explorer in new tab
+        window.open(
+          `https://sepolia.scrollscan.com/tx/${batchTxData.transactionHash}`,
+          "_blank"
+        );
+
+        setHasShownTxSuccess(true);
+      }, 3000);
+    }
+  }, [batchTxData, hasShownTxSuccess]);
+
+  // Reset hasShownTxSuccess when starting a new transaction
+  useEffect(() => {
+    if (isTxProcessing) {
+      setHasShownTxSuccess(false);
+    }
+  }, [isTxProcessing]);
+
+  // Function to fetch token balances
+  const fetchTokenBalances = async () => {
+    if (!account?.address) return;
+
+    try {
+      const [usdcBalance, daiBalance] = await Promise.all([
+        getWalletBalance({
+          address: account.address,
+          client,
+          chain: scrollSepolia,
+          tokenAddress: "0x2C9678042D52B97D27f2bD2947F7111d93F3dD0D",
+        }),
+        getWalletBalance({
+          address: account.address,
+          client,
+          chain: scrollSepolia,
+          tokenAddress: "0x7984E363c38b590bB4CA35aEd5133Ef2c6619C40",
+        }),
+      ]);
+
+      setTokenBalances({
+        USDC: (Number(usdcBalance.value) / 1e6).toFixed(2),
+        DAI: (Number(daiBalance.value) / 1e18).toFixed(2),
+      });
+    } catch (error) {
+      console.error("Error fetching token balances:", error);
+    }
+  };
+
+  // Fetch token balances when account changes
+  useEffect(() => {
+    if (account?.address) {
+      fetchTokenBalances();
+    }
+  }, [account?.address]);
 
   // If not authenticated, show sign-in prompt
   if (!isAuthenticated) {
@@ -424,7 +545,7 @@ console.log("AVS Details:", avsDetails);
               onClick={() => setShowComingSoonModal(true)}
               className="mt-4 px-8 py-2 text-xl"
             >
-          Create Agent
+              Create Agent
             </CustomButton>
 
             <CustomButton
@@ -450,57 +571,104 @@ console.log("AVS Details:", avsDetails);
               Featured Agents
             </h1>
             <div className="flex items-center gap-2">
-              <TransactionButton
+              <button
                 className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
-                transaction={() =>
-                  prepareContractCall({
-                    contract: faucet,
-                    method: "function requestDrip()",
-                    params: [],
-                  })
-                }
-                onClick={() => {
-                  toast.info("Preparing transaction...", {
+                onClick={async () => {
+                  if (!account?.address) {
+                    toast.error("Please connect your wallet first", {
+                      position: "bottom-right",
+                      autoClose: 3000,
+                    });
+                    return;
+                  }
+
+                  setIsTxProcessing(true);
+                  toast.info("Preparing transactions...", {
                     position: "bottom-right",
                     autoClose: 3000,
                   });
-                }}
-                onTransactionSent={(tx) => {
-                  toast.success(
-                    "Transaction sent! Waiting for confirmation...",
-                    {
+
+                  try {
+                    // Prepare all three transactions
+                    const transactions = [
+                      // Faucet drip transaction
+                      prepareTransaction({
+                        to: "0x602396FFA43b7FfAdc80e01c5A11fc74F3BA59f5",
+                        data: "0x434ab101",
+                        chain: scrollSepolia,
+                        client: client,
+                        value: BigInt(0),
+                      }),
+                      // USDC mint transaction
+                      prepareTransaction({
+                        to: "0x2F826FD1a0071476330a58dD1A9B36bcF7da832d",
+                        data: `0xc6c3bbe60000000000000000000000002c9678042d52b97d27f2bd2947f7111d93f3dd0d000000000000000000000000${account.address.slice(
+                          2
+                        )}00000000000000000000000000000000000000000000000000000002540be400`,
+                        chain: scrollSepolia,
+                        client: client,
+                        value: BigInt(0),
+                      }),
+                      // DAI mint transaction
+                      prepareTransaction({
+                        to: "0x2F826FD1a0071476330a58dD1A9B36bcF7da832d",
+                        data: `0xc6c3bbe60000000000000000000000007984e363c38b590bb4ca35aed5133ef2c6619c40000000000000000000000000${account.address.slice(
+                          2
+                        )}000000000000000000000000000000000000000000000021e19e0c9bab2400000`,
+                        chain: scrollSepolia,
+                        client: client,
+                        value: BigInt(0),
+                      }),
+                    ];
+
+                    toast.info("Sending transactions...", {
+                      position: "bottom-right",
+                      autoClose: 3000,
+                    });
+
+                    // Send batch transaction
+                    sendBatchTransaction(transactions);
+                  } catch (error) {
+                    console.error("Transaction error:", error);
+                    const cleanErrorMessage =
+                      error instanceof Error
+                        ? error.message.split("contract:")[0].trim()
+                        : "Unknown error";
+                    toast.error(cleanErrorMessage, {
                       position: "bottom-right",
                       autoClose: 5000,
-                    }
-                  );
+                    });
+                  } finally {
+                    setIsTxProcessing(false);
+                  }
                 }}
-                onTransactionConfirmed={(receipt) => {
-                  toast.success(
-                    "🎉 Transaction confirmed! Funds claimed successfully!",
-                    {
-                      position: "bottom-right",
-                      autoClose: 5000,
-                    }
-                  );
-                  // Trigger confetti
-                  confetti({
-                    particleCount: 100,
-                    spread: 70,
-                    origin: { y: 0.6 },
-                  });
-                }}
-                onError={(error) => {
-                  const cleanErrorMessage = error.message
-                    .split("contract:")[0]
-                    .trim();
-                  toast.error(cleanErrorMessage, {
-                    position: "bottom-right",
-                    autoClose: 5000,
-                  });
-                }}
+                disabled={isTxProcessing}
               >
-                Claim Test Funds
-              </TransactionButton>
+                {isTxProcessing ? "Processing..." : "Claim Test Funds"}
+              </button>
+
+              <div className="relative">
+                <button
+                  className="bg-[#1a1a4a] text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl border border-yellow-500/20"
+                  onClick={() => setShowTokenBalances(!showTokenBalances)}
+                >
+                  ERC-20 Token Balances
+                </button>
+                {showTokenBalances && (
+                  <div className="absolute right-0 mt-2 w-64 bg-[#1a1a4a] border border-yellow-500/20 rounded-lg shadow-xl z-50">
+                    <div className="p-4 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-yellow-200">USDC:</span>
+                        <span className="text-white">{tokenBalances.USDC}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-yellow-200">DAI:</span>
+                        <span className="text-white">{tokenBalances.DAI}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -517,6 +685,8 @@ console.log("AVS Details:", avsDetails);
           draggable
           pauseOnHover
           theme="dark"
+          style={{ marginBottom: "5px" }}
+          className="!bottom-[80px]"
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full">
@@ -531,25 +701,32 @@ console.log("AVS Details:", avsDetails);
               </div>
             ) : (
               <>
-                <h2 className="text-xl md:text-2xl font-bold text-yellow-300 mb-2 md:mb-3">{displayAgentData.name}</h2>
-                <p className="text-gray-200/90 mb-3 md:mb-4 text-sm md:text-base">{displayAgentData.description}</p>
-                
+                <h2 className="text-xl md:text-2xl font-bold text-yellow-300 mb-2 md:mb-3">
+                  {displayAgentData.name}
+                </h2>
+                <p className="text-gray-200/90 mb-3 md:mb-4 text-sm md:text-base">
+                  {displayAgentData.description}
+                </p>
+
                 <div className="mb-3 md:mb-4 text-sm md:text-base">
                   <span className="text-gray-400">Execution Fee:</span>
                   <span className="ml-2 text-white">
                     {formatWeiToEth(displayAgentData.executionFees)}
                   </span>
                 </div>
-                
+
                 <div className="text-xs md:text-sm text-yellow-200 mt-2 md:mt-4">
-                  Powered by:  <a href="#" className="text-white hover:underline">Autonome</a>
+                  Powered by:{" "}
+                  <a href="#" className="text-white hover:underline">
+                    Autonome
+                  </a>
                 </div>
               </>
             )}
           </div>
 
           {/* Add Your Agent Card */}
-          <div 
+          <div
             className="bg-white/5 backdrop-blur-sm border border-dashed border-gray-700 rounded-lg p-4 md:p-6 flex items-center justify-center hover:border-yellow-500 transition-colors cursor-pointer"
             onClick={() => setShowComingSoonModal(true)}
           >
@@ -596,7 +773,7 @@ console.log("AVS Details:", avsDetails);
                 >
                   AVS Logs
                 </button>
-            </div>
+              </div>
 
               {/* Tab Content */}
               <div className="flex-1 overflow-auto">
@@ -611,82 +788,143 @@ console.log("AVS Details:", avsDetails);
 
                     <div className="mt-6 space-y-3">
                       <Card className="bg-yellow-200">
-                        <span className="text-yellow-700 font-bold">Category:</span>
-                        <span className="ml-2 text-yellow-900">{displayAgentData.category}</span>
+                        <span className="text-yellow-700 font-bold">
+                          Category:
+                        </span>
+                        <span className="ml-2 text-yellow-900">
+                          {displayAgentData.category}
+                        </span>
                       </Card>
                       <Card className="border border-dashed border-yellow-200">
-                        <span className="text-white font-bold">Agent Creation Date:</span>
-                        <a href="#" className="ml-2 text-yellow-200">{displayAgentData.creationDate}</a>
+                        <span className="text-white font-bold">
+                          Agent Creation Date:
+                        </span>
+                        <a href="#" className="ml-2 text-yellow-200">
+                          {displayAgentData.creationDate}
+                        </a>
                       </Card>
                       <Card className="border border-dashed border-yellow-200">
-                        <span className="text-white font-bold">Wallet Address:</span>
-                        <pre className="ml-2 text-yellow-200">{displayAgentData.walletAddress}</pre>
+                        <span className="text-white font-bold">
+                          Creator Wallet Address:
+                        </span>
+                        <pre className="ml-2 text-yellow-200">
+                          <a
+                            href={`https://sepolia.scrollscan.com/address/${displayAgentData.walletAddress}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 text-yellow-200 hover:underline break-all"
+                          >
+                            {displayAgentData.walletAddress}
+                          </a>
+                        </pre>
                       </Card>
                       <Card className="border border-dashed border-yellow-200">
-                        <span className="text-white font-bold">Execution Fees:</span>
-                        <span className="ml-2 text-yellow-200">{displayAgentData.executionFees}</span>
+                        <span className="text-white font-bold">
+                          Execution Fees:
+                        </span>
+                        <span className="ml-2 text-yellow-200">
+                          {formatWeiToEth(displayAgentData.executionFees)}
+                        </span>
                       </Card>
                       <Card className="bg-yellow-200">
-                        <span className="text-yellow-600 font-bold">AVS Plugin:</span>
-                        <span className="ml-2 text-yellow-900">{displayAgentData.avsPlugin || ""}</span>
+                        <span className="text-yellow-600 font-bold">
+                          AVS Plugin:
+                        </span>
+                        <span className="ml-2 text-yellow-900">
+                          {avsDetails?.name || ""}
+                        </span>
                       </Card>
-                      {avsPolicyData && (
+                      {avsDetails && (
                         <>
                           <Card className="border border-dashed border-yellow-200">
-                            <span className="text-white font-bold">AVS Policy Description:</span>
-                            <span className="ml-2 text-yellow-200">{avsPolicyData.description}</span>
-                          </Card>
-                          <Card className="border border-dashed border-yellow-200">
-                            <span className="text-gray-400">AVS Policy Status:</span>
-                            <span className={`ml-2 ${avsPolicyData.isActive ? "text-green-400" : "text-red-400"}`}>
-                              {avsPolicyData.isActive ? "Active" : "Inactive"}
+                            <span className="text-white font-bold">
+                              AVS Policy Description:
+                            </span>
+                            <span className="ml-2 text-yellow-200">
+                              {avsDetails?.description || ""}
                             </span>
                           </Card>
                           <Card className="border border-dashed border-yellow-200">
-                            <span className="text-white font-bold">AVS Policy Creator:</span>
-                            <a 
-                              href={`https://sepolia.scrollscan.dev/address/${avsPolicyData.creator}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
+                            <span className="text-gray-400">
+                              AVS Policy Status:
+                            </span>
+                            <span
+                              className={`ml-2 ${
+                                avsDetails?.isActive
+                                  ? "text-green-400"
+                                  : "text-red-400"
+                              }`}
+                            >
+                              {avsDetails?.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </Card>
+                          <Card className="border border-dashed border-yellow-200">
+                            <span className="text-white font-bold">
+                              AVS Policy Creator:
+                            </span>
+                            <a
+                              href={`https://sepolia.scrollscan.com/address/${avsDetails?.creator}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className="ml-2 text-yellow-200 hover:underline break-all"
                             >
-                              {avsPolicyData.creator}
+                              {avsDetails?.creator || ""}
                             </a>
                           </Card>
-                          
+
                           {/* Collapsible Conditions Section */}
                           <div className="mt-4">
-                            <button 
+                            <button
                               onClick={() => setShowConditions(!showConditions)}
                               className="flex items-center text-yellow-400 hover:text-yellow-300 transition-colors"
                             >
-                              <span className="mr-2">{showConditions ? '▼' : '►'}</span>
+                              <span className="mr-2">
+                                {showConditions ? "▼" : "►"}
+                              </span>
                               <span>AVS Policy Conditions</span>
                             </button>
-                            
+
                             {showConditions && (
                               <div className="mt-3 pl-4 border-l-2 border-gray-700 space-y-4">
                                 {/* When Condition */}
                                 <div>
-                                  <h4 className="text-yellow-200 font-medium mb-1">When Condition</h4>
+                                  <h4 className="text-yellow-200 font-medium mb-1">
+                                    When Condition
+                                  </h4>
                                   <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
-                                    {JSON.stringify(avsPolicyData.whenCondition, null, 2) || "0.0"}
+                                    {JSON.stringify(
+                                      avsDetails?.whenCondition,
+                                      null,
+                                      2
+                                    ) || "0.0"}
                                   </pre>
                                 </div>
-                                
+
                                 {/* How Condition */}
                                 <div>
-                                  <h4 className="text-yellow-200 font-medium mb-1">How Condition</h4>
+                                  <h4 className="text-yellow-200 font-medium mb-1">
+                                    How Condition
+                                  </h4>
                                   <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
-                                    {JSON.stringify(avsPolicyData.howCondition, null, 2)}
+                                    {JSON.stringify(
+                                      avsDetails?.howCondition,
+                                      null,
+                                      2
+                                    )}
                                   </pre>
                                 </div>
-                                
+
                                 {/* What Condition */}
                                 <div>
-                                  <h4 className="text-yellow-200 font-medium mb-1">What Condition</h4>
+                                  <h4 className="text-yellow-200 font-medium mb-1">
+                                    What Condition
+                                  </h4>
                                   <pre className="bg-[#1a1a4a] p-2 rounded text-xs text-gray-300 overflow-x-auto">
-                                    {JSON.stringify(avsPolicyData.whatCondition, null, 2)}
+                                    {JSON.stringify(
+                                      avsDetails?.whatCondition,
+                                      null,
+                                      2
+                                    )}
                                   </pre>
                                 </div>
                               </div>
@@ -695,23 +933,43 @@ console.log("AVS Details:", avsDetails);
                         </>
                       )}
                       <Card className="border border-dashed border-yellow-200">
-                        <span className="text-white font-bold">Total tx executed:</span>
-                        <span className="ml-2 text-yellow-200">{displayAgentData.totalTxExecuted}</span>
+                        <span className="text-white font-bold">
+                          Total tx executed:
+                        </span>
+                        <span className="ml-2 text-yellow-200">
+                          {displayAgentData.totalTxExecuted}
+                        </span>
                       </Card>
                       <Card className="border border-dashed border-yellow-200">
                         <span className="text-white">Hash of past tx:</span>
-                        <a href="#" className="ml-2 text-blue-400 hover:underline">{displayAgentData.lastTxHash || "No transactions yet"}</a>
+                        <a
+                          href="#"
+                          className="ml-2 text-blue-400 hover:underline"
+                        >
+                          {displayAgentData.lastTxHash || "No transactions yet"}
+                        </a>
                       </Card>
                       {displayAgentData.dockerfileHash && (
                         <Card className="border border-dashed border-yellow-200">
-                          <span className="text-white font-bold">Dockerfile Hash:</span>
-                          <span className="ml-2 text-yellow-200 break-all">{displayAgentData.dockerfileHash}</span>
+                          <span className="text-white font-bold">
+                            Dockerfile Hash:
+                          </span>
+                          <span className="ml-2 text-yellow-200 break-all">
+                            {displayAgentData.dockerfileHash}
+                          </span>
                         </Card>
                       )}
                       {displayAgentData.agentLocation && (
                         <Card className="border border-dashed border-yellow-200">
                           <span className="text-white">Agent Location:</span>
-                          <a href={displayAgentData.agentLocation} target="_blank" rel="noopener noreferrer" className="ml-2 text-yellow-200 hover:underline break-all">{displayAgentData.agentLocation}</a>
+                          <a
+                            href={displayAgentData.agentLocation}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 text-yellow-200 hover:underline break-all"
+                          >
+                            {displayAgentData.agentLocation}
+                          </a>
                         </Card>
                       )}
                       <div className="md:hidden mt-4">
@@ -794,8 +1052,8 @@ console.log("AVS Details:", avsDetails);
                         ))}
                         <div ref={logsEndRef} />
                       </div>
-                  )}
-                </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -864,7 +1122,7 @@ console.log("AVS Details:", avsDetails);
           </div>
         </div>
       )}
-      
+
       {/* Footer */}
       <Footer />
     </main>
