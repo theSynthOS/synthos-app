@@ -105,9 +105,9 @@ export default function Chatbot({
   ]);
 
   // Add contract addresses at the top
-  const TASK_REGISTRY_ADDRESS = "0x8eab19f680afCFD21f0d42353E06C85F3359024C";
+  const TASK_REGISTRY_ADDRESS = "0x5e38f31693CcAcFCA4D8b70882d8b696cDc24273";
   const POLICY_COORDINATOR_ADDRESS =
-    "0x2e22Bc79b58117015bF458045488E09aaa0bB794";
+    "0xbAdfD548E1D369633Cf23a53C7c8dC37607001e9";
 
   // Initialize contracts
   const taskRegistry = getContract({
@@ -183,7 +183,7 @@ export default function Chatbot({
     useReadContract({
       contract: policyCoordinator,
       method:
-        "function getValidationStatus(bytes32 taskUuid) returns (string memory status, string memory reason)",
+        "function getValidationStatus(string taskUuid) returns (string memory status, string memory reason)",
       params: [currentTxUUID as `0x${string}`],
     });
 
@@ -256,8 +256,8 @@ export default function Chatbot({
 
   // Function to check if message contains a transaction UUID
   const extractTxUUID = (message: string) => {
-    // Looking for format like: txUUID: 0x53594e544484f53000000000000000000000000000000000000000000000000
-    const match = message.match(/txUUID:\s*(0x[a-fA-F0-9]{64})/);
+    // Match any string between txUUID: and the next whitespace or end of line
+    const match = message.match(/txUUID: ([^\s\n]+)/);
     return match ? match[1] : null;
   };
 
@@ -404,15 +404,16 @@ export default function Chatbot({
           }
         });
       } else {
-        console.log("GOES HERE ELSE");
         const assistantMessage: Message = {
           role: "assistant",
-          content: response.response || "Sorry, I received an unexpected response format. Please try again.",
+          content:
+            response.response ||
+            "Sorry, I received an unexpected response format. Please try again.",
           timestamp: new Date(),
           metadata: response.metadata,
         };
         setMessages((prev) => [...prev, assistantMessage]);
-        
+
         // Generate new suggested questions based on the response content
         // Use metadata.suggestedQuestions if available, otherwise generate them
         if (response.metadata?.suggestedQuestions) {
@@ -421,7 +422,7 @@ export default function Chatbot({
           setSuggestedQuestions(generateFollowUpQuestions(response.response));
         }
       }
-      
+
       // Check if the chat should end
       if (response.metadata?.action === "END") {
         setIsChatEnded(true);
@@ -559,8 +560,7 @@ Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
             };
             setMessages((prev) => [...prev, assistantMessage]);
           });
-        } else if (process.env.NODE_ENV === 'development') {
-          console.log("GOES HEREEEEE");
+        } else if (process.env.NODE_ENV === "development") {
           console.log("Unexpected response format:", response);
         }
         setIsLoading(false);
@@ -590,7 +590,9 @@ Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
                     : "bg-[#1a1a4a] text-white"
                 }`}
               >
-                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                <div className="whitespace-pre-wrap break-words">
+                  {msg.content}
+                </div>
                 <div className="text-xs mt-1 opacity-70 text-right">
                   {new Date(msg.timestamp).toLocaleTimeString()}
                 </div>
