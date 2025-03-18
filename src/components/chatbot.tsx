@@ -20,6 +20,7 @@ import { toast } from "react-toastify";
 import { taskRegistryAbi } from "@/utils/abi/taskRegistryABI";
 import { Abi } from "thirdweb/utils";
 import { Account } from "thirdweb/wallets";
+import { encodeFunctionData, parseUnits } from "viem";
 
 interface Message {
   role: "user" | "assistant";
@@ -311,31 +312,7 @@ export default function Chatbot({
 
       let calldata = taskDetails.callData as `0x${string}`;
 
-      // The calldata format is:
-      // 0x617ba037 (function signature)
-      // 000000000000000000000000 (padding)
-      // 2c9678042d52b97d27f2bd2947f7111d93f3dd0d (asset address)
-      // 0000000000000000000000000000000000000000000000000000000000000064 (amount)
-      // 000000000000000000000000 (padding)
-      // 8d9411dc5dd40521ad3caa9a8f4f766fb7bd0a42 (onBehalfOf address)
-      // 0000000000000000000000000000000000000000000000000000000000000000 (referralCode)
-
-      // Replace the onBehalfOf address
-      const userAddress = account.address.replace("0x", "").padStart(64, "0");
-      console.log("userAddress", userAddress);
-
-      // Split the calldata into parts and replace the onBehalfOf address
-      const parts = {
-        start: calldata.slice(0, 202), // Everything up to onBehalfOf (function sig + asset + amount + padding)
-        onBehalfOf: userAddress, // Replace with user address
-        end: calldata.slice(266), // Keep referralCode
-      };
-
-      // Construct new calldata with user's address
-      const newCalldata =
-        `${parts.start}${parts.onBehalfOf}${parts.end}` as `0x${string}`;
-
-      console.log("newCalldata", newCalldata);
+      console.log("calldata original", calldata);
 
       // Prepare both transactions
       const transactions = [
@@ -348,17 +325,17 @@ export default function Chatbot({
         }),
         prepareTransaction({
           to: taskDetails.to,
-          data: "0x617ba0370000000000000000000000002c9678042d52b97d27f2bd2947f7111d93f3dd0d0000000000000000000000000000000000000000000000000000000005f5e1000000000000000000000000008e5b763705df8891dae0941652c046e77e8f0bfc0000000000000000000000000000000000000000000000000000000000000000", // Fix: Remove quotes to use the actual newCalldata value
+          data: calldata, // Fix: Remove quotes to use the actual newCalldata value
           chain: scrollSepolia,
           client: client,
           value: BigInt(0),
         }),
-        // prepareTransaction({
-        //   to: creatorAddress as `0x${string}`,
-        //   chain: scrollSepolia,
-        //   client: client,
-        //   value: executionFees,
-        // }),
+        prepareTransaction({
+          to: creatorAddress as `0x${string}`,
+          chain: scrollSepolia,
+          client: client,
+          value: executionFees,
+        }),
       ];
 
       console.log("transactions", transactions);
