@@ -9,7 +9,7 @@ const PASSWORD = process.env.NEXT_PUBLIC_PASSWORD || '';
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Agent endpoint - use different values based on environment
-const AGENT_ENDPOINT = process.env.NEXT_PUBLIC_AI_AGENT || '';
+const AGENT_ENDPOINT = 'http://localhost:3001/ed9ddab6-6713-055c-bca6-3390aee6bf72/message';
 
 
 interface AiAgentRequest {
@@ -38,13 +38,14 @@ interface AgentLogEntry {
 /**
  * Send a message to the AI agent and get a response
  */
-export async function sendMessageToAgent(message: string, agentId?: string) {
+export async function sendMessageToAgent(message: string, agentId?: string, userAddress?: string) {
   console.log(`Sending message to agent: ${isDevelopment ? 'Development mode' : 'Production mode'}`);
   console.log(`Using endpoint: ${AGENT_ENDPOINT}`);
   
   try {
     let data;
     if (isDevelopment) {
+      console.log("Sending message to agent in development mode");
     // Call the agent (using the appropriate endpoint based on environment)
     const response = await fetch(AGENT_ENDPOINT, {
       method: 'POST',
@@ -52,8 +53,9 @@ export async function sendMessageToAgent(message: string, agentId?: string) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        user: "user",
+        user: userAddress,
         text: message,
+        roomId: userAddress,
       }),
     });
 

@@ -41,6 +41,7 @@ interface AgentLog {
 
 interface ChatbotProps {
   agentId?: string;
+  userAddress?: string;
   agentName?: string;
   executionFees?: bigint;
   creatorAddress?: string;
@@ -55,7 +56,8 @@ interface TaskResult {
 }
 
 export default function Chatbot({
-  agentId,
+  agentId, 
+  userAddress,
   agentName = "AI Assistant",
   executionFees = BigInt(0),
   creatorAddress = "",
