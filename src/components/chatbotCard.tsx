@@ -9,14 +9,16 @@ interface ChatbotCardProps {
   title?: string;
   executionFees?: bigint;
   creatorAddress?: string;
+  userAddress?: string;
 }
 
 export default function ChatbotCard({
   agentId,
+  userAddress,
   agentName = "AI Assistant",
   title = "AI is the new UI",
   executionFees = BigInt(0),
-  creatorAddress = "",
+  creatorAddress = "0xeb0d8736Cc2c47882f112507cc8A3355d37D2413",
 }: ChatbotCardProps) {
   return (
     <div

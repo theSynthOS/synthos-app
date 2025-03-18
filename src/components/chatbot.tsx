@@ -20,6 +20,7 @@ import { toast } from "react-toastify";
 import { taskRegistryAbi } from "@/utils/abi/taskRegistryABI";
 import { Abi } from "thirdweb/utils";
 import { Account } from "thirdweb/wallets";
+import { encodeFunctionData, parseUnits } from "viem";
 
 interface Message {
   role: "user" | "assistant";
@@ -41,6 +42,7 @@ interface AgentLog {
 
 interface ChatbotProps {
   agentId?: string;
+  userAddress?: string;
   agentName?: string;
   executionFees?: bigint;
   creatorAddress?: string;
@@ -55,10 +57,11 @@ interface TaskResult {
 }
 
 export default function Chatbot({
-  agentId,
+  agentId, 
+  userAddress,
   agentName = "AI Assistant",
   executionFees = BigInt(0),
-  creatorAddress = "",
+  creatorAddress = "0xeb0d8736Cc2c47882f112507cc8A3355d37D2413",
   height = "100%",
 }: ChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -96,12 +99,13 @@ export default function Chatbot({
   };
 
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
-    "Hey, I have " +
-      walletBalance?.data?.displayValue.toString() +
-      " " +
-      walletBalance?.data?.symbol.toString() +
-      " and I would like to invest. What's the best recommendation for me?",
+    // "Hey, I have " +
+    //   walletBalance?.data?.displayValue.toString() +
+    //   " " +
+    //   walletBalance?.data?.symbol.toString() +
+    //   " and I would like to invest. What's the best recommendation for me?",
     "Based on my smart wallet balance, whats the best investment for me?",
+    "Hey, I have 10 USDC and I would like to invest. What's the best recommendation for me?",
   ]);
 
   // Add contract addresses at the top
@@ -133,11 +137,7 @@ export default function Chatbot({
       // Update message with transaction hash immediately
       const txMessage: Message = {
         role: "assistant",
-        content: `Transaction submitted successfully!\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
-          TRANSACTION_VALUE
-        )}\nExecution Fee: ${formatWeiToEth(
-          executionFees
-        )}\n\nCheck at ScrollScan: https://sepolia.scrollscan.com/tx/${
+        content: `Transaction submitted successfully!\n\nCheck at ScrollScan: https://sepolia.scrollscan.com/tx/${
           batchTxData.transactionHash
         }`,
         timestamp: new Date(),
@@ -267,16 +267,16 @@ export default function Chatbot({
 
   // Function to handle transaction execution
   const handleTransactionExecution = async () => {
-    if (!hasEnoughBalance()) {
-      const requiredAmount = formatWeiToEth(TRANSACTION_VALUE + executionFees);
-      const errorMessage: Message = {
-        role: "assistant",
-        content: `Insufficient balance. You need at least ${requiredAmount} to cover both the transaction value and execution fee.`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      return;
-    }
+    // if (!hasEnoughBalance()) {
+    //   const requiredAmount = formatWeiToEth(TRANSACTION_VALUE + executionFees);
+    //   const errorMessage: Message = {
+    //     role: "assistant",
+    //     content: `Insufficient balance. You need at least ${requiredAmount} to cover both the transaction value and execution fee.`,
+    //     timestamp: new Date(),
+    //   };
+    //   setMessages((prev) => [...prev, errorMessage]);
+    //   return;
+    // }
 
     if (!creatorAddress) {
       const errorMessage: Message = {
@@ -309,40 +309,23 @@ export default function Chatbot({
 
       let calldata = taskDetails.callData as `0x${string}`;
 
-      // The calldata format is:
-      // 0x617ba037 (function signature)
-      // 000000000000000000000000 (padding)
-      // 2c9678042d52b97d27f2bd2947f7111d93f3dd0d (asset address)
-      // 0000000000000000000000000000000000000000000000000000000000000064 (amount)
-      // 000000000000000000000000 (padding)
-      // 8d9411dc5dd40521ad3caa9a8f4f766fb7bd0a42 (onBehalfOf address)
-      // 0000000000000000000000000000000000000000000000000000000000000000 (referralCode)
-
-      // Replace the onBehalfOf address
-      const userAddress = account.address.replace("0x", "").padStart(64, "0");
-      console.log("userAddress", userAddress);
-
-      // Split the calldata into parts and replace the onBehalfOf address
-      const parts = {
-        start: calldata.slice(0, 202), // Everything up to onBehalfOf (function sig + asset + amount + padding)
-        onBehalfOf: userAddress, // Replace with user address
-        end: calldata.slice(266), // Keep referralCode
-      };
-
-      // Construct new calldata with user's address
-      const newCalldata =
-        `${parts.start}${parts.onBehalfOf}${parts.end}` as `0x${string}`;
-
-      console.log("newCalldata", newCalldata);
+      console.log("calldata original", calldata);
 
       // Prepare both transactions
       const transactions = [
         prepareTransaction({
-          to: taskDetails.to,
-          data: newCalldata, // Fix: Remove quotes to use the actual newCalldata value
+          to: "0x2C9678042D52B97D27f2bD2947F7111d93F3dD0D",
+          data: "0x095ea7b300000000000000000000000048914c788295b5db23af2b5f0b3be775c4ea9440ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
           chain: scrollSepolia,
           client: client,
-          value: TRANSACTION_VALUE,
+          value: BigInt(0),
+        }),
+        prepareTransaction({
+          to: taskDetails.to,
+          data: calldata, // Fix: Remove quotes to use the actual newCalldata value
+          chain: scrollSepolia,
+          client: client,
+          value: BigInt(0),
         }),
         prepareTransaction({
           to: creatorAddress as `0x${string}`,
@@ -358,14 +341,14 @@ export default function Chatbot({
       setIsTxSent(true);
 
       // Add processing message first
-      const processingMessage: Message = {
-        role: "assistant",
-        content: `Processing transaction...\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
-          TRANSACTION_VALUE
-        )}\nExecution Fee: ${formatWeiToEth(executionFees)}`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, processingMessage]);
+      // const processingMessage: Message = {
+      //   role: "assistant",
+      //   content: `Processing transaction...\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
+      //     TRANSACTION_VALUE
+      //   )}\nExecution Fee: ${formatWeiToEth(executionFees)}`,
+      //   timestamp: new Date(),
+      // };
+      // setMessages((prev) => [...prev, processingMessage]);
       //disable the button
       document
         .getElementById("send-message-input")
@@ -478,28 +461,28 @@ export default function Chatbot({
 
   // Function to render the send/execute button with appropriate styling
   const renderExecuteButton = () => {
-    if (!hasEnoughBalance()) {
-      const tooltipText = `Required: ${formatWeiToEth(
-        TRANSACTION_VALUE + executionFees
-      )}
-Transaction Value: ${formatWeiToEth(TRANSACTION_VALUE)}
-Execution Fee: ${formatWeiToEth(executionFees)}
-Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
-        walletBalance?.data?.symbol || "ETH"
-      }`;
+//     if (!hasEnoughBalance()) {
+//       const tooltipText = `Required: ${formatWeiToEth(
+//         TRANSACTION_VALUE + executionFees
+//       )}
+// Transaction Value: ${formatWeiToEth(TRANSACTION_VALUE)}
+// Execution Fee: ${formatWeiToEth(executionFees)}
+// Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
+//         walletBalance?.data?.symbol || "ETH"
+//       }`;
 
-      return (
-        <button
-          disabled
-          className="min-w-[140px] bg-red-500/90 backdrop-blur-sm text-white font-medium rounded-xl px-4 py-2 
-          transition-all duration-200 h-[44px] opacity-75 flex items-center justify-center gap-2 
-          border border-red-400/20"
-          title={tooltipText}
-        >
-          Insufficient Balance
-        </button>
-      );
-    }
+//       return (
+//         <button
+//           disabled
+//           className="min-w-[140px] bg-red-500/90 backdrop-blur-sm text-white font-medium rounded-xl px-4 py-2 
+//           transition-all duration-200 h-[44px] opacity-75 flex items-center justify-center gap-2 
+//           border border-red-400/20"
+//           title={tooltipText}
+//         >
+//           Insufficient Balance
+//         </button>
+//       );
+//     }
 
     if (isTaskLoading || isPolicyLoading) {
       return (

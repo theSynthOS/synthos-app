@@ -7,20 +7,20 @@ import Modal from "../components/detailModal";
 import { motion } from "framer-motion";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
 import {
-  getContract,
   prepareContractCall,
   prepareTransaction,
   eth_getTransactionCount,
   getRpcClient,
 } from "thirdweb";
 import {
-  useActiveAccount,
-  useReadContract,
   TransactionButton,
   useWalletBalance,
   useSendBatchTransaction,
 } from "thirdweb/react";
 import { getWalletBalance } from "thirdweb/wallets";
+import { getContract } from "thirdweb";
+import { scrollSepoliaTestnet } from "thirdweb/chains";
+import { useActiveAccount, useReadContract } from "thirdweb/react";
 import { scrollSepolia } from "@/client";
 import { client } from "@/client";
 import { isLoggedIn } from "../actions/login";
@@ -85,6 +85,8 @@ export default function Home() {
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userAddress, setUserAddress] = useState<string | null>(null);
+  const address =  useActiveAccount();
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [showConditions, setShowConditions] = useState(false);
   const account = useActiveAccount();
@@ -1188,6 +1190,7 @@ End Time: ${avsPolicyData?.whenCondition?.endTime || "0"}`}
             <div className="hidden md:block md:w-1/2 h-full">
               <ChatbotCard
                 agentId={displayAgentData.id}
+                userAddress={userAddress || ""}
                 agentName={displayAgentData.name}
                 executionFees={displayAgentData.executionFees}
                 creatorAddress={displayAgentData.walletAddress}
@@ -1206,6 +1209,7 @@ End Time: ${avsPolicyData?.whenCondition?.endTime || "0"}`}
           <div className="h-[70vh]">
             <ChatbotCard
               agentId={displayAgentData.id}
+              userAddress={userAddress || ""}
               agentName={displayAgentData.name}
               executionFees={displayAgentData.executionFees}
               creatorAddress={displayAgentData.walletAddress}
