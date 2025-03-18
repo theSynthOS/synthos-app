@@ -60,7 +60,7 @@ export default function Chatbot({
   userAddress,
   agentName = "AI Assistant",
   executionFees = BigInt(0),
-  creatorAddress = "",
+  creatorAddress = "0xeb0d8736Cc2c47882f112507cc8A3355d37D2413",
   height = "100%",
 }: ChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -269,16 +269,16 @@ export default function Chatbot({
 
   // Function to handle transaction execution
   const handleTransactionExecution = async () => {
-    if (!hasEnoughBalance()) {
-      const requiredAmount = formatWeiToEth(TRANSACTION_VALUE + executionFees);
-      const errorMessage: Message = {
-        role: "assistant",
-        content: `Insufficient balance. You need at least ${requiredAmount} to cover both the transaction value and execution fee.`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      return;
-    }
+    // if (!hasEnoughBalance()) {
+    //   const requiredAmount = formatWeiToEth(TRANSACTION_VALUE + executionFees);
+    //   const errorMessage: Message = {
+    //     role: "assistant",
+    //     content: `Insufficient balance. You need at least ${requiredAmount} to cover both the transaction value and execution fee.`,
+    //     timestamp: new Date(),
+    //   };
+    //   setMessages((prev) => [...prev, errorMessage]);
+    //   return;
+    // }
 
     if (!creatorAddress) {
       const errorMessage: Message = {
@@ -340,18 +340,25 @@ export default function Chatbot({
       // Prepare both transactions
       const transactions = [
         prepareTransaction({
-          to: taskDetails.to,
-          data: newCalldata, // Fix: Remove quotes to use the actual newCalldata value
+          to: "0x2C9678042D52B97D27f2bD2947F7111d93F3dD0D",
+          data: "0x095ea7b300000000000000000000000048914c788295b5db23af2b5f0b3be775c4ea9440ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
           chain: scrollSepolia,
           client: client,
-          value: TRANSACTION_VALUE,
+          value: BigInt(0),
         }),
         prepareTransaction({
-          to: creatorAddress as `0x${string}`,
+          to: taskDetails.to,
+          data: "0x617ba0370000000000000000000000002c9678042d52b97d27f2bd2947f7111d93f3dd0d0000000000000000000000000000000000000000000000000000000005f5e1000000000000000000000000008e5b763705df8891dae0941652c046e77e8f0bfc0000000000000000000000000000000000000000000000000000000000000000", // Fix: Remove quotes to use the actual newCalldata value
           chain: scrollSepolia,
           client: client,
-          value: executionFees,
+          value: BigInt(0),
         }),
+        // prepareTransaction({
+        //   to: creatorAddress as `0x${string}`,
+        //   chain: scrollSepolia,
+        //   client: client,
+        //   value: executionFees,
+        // }),
       ];
 
       console.log("transactions", transactions);
@@ -480,28 +487,28 @@ export default function Chatbot({
 
   // Function to render the send/execute button with appropriate styling
   const renderExecuteButton = () => {
-    if (!hasEnoughBalance()) {
-      const tooltipText = `Required: ${formatWeiToEth(
-        TRANSACTION_VALUE + executionFees
-      )}
-Transaction Value: ${formatWeiToEth(TRANSACTION_VALUE)}
-Execution Fee: ${formatWeiToEth(executionFees)}
-Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
-        walletBalance?.data?.symbol || "ETH"
-      }`;
+//     if (!hasEnoughBalance()) {
+//       const tooltipText = `Required: ${formatWeiToEth(
+//         TRANSACTION_VALUE + executionFees
+//       )}
+// Transaction Value: ${formatWeiToEth(TRANSACTION_VALUE)}
+// Execution Fee: ${formatWeiToEth(executionFees)}
+// Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
+//         walletBalance?.data?.symbol || "ETH"
+//       }`;
 
-      return (
-        <button
-          disabled
-          className="min-w-[140px] bg-red-500/90 backdrop-blur-sm text-white font-medium rounded-xl px-4 py-2 
-          transition-all duration-200 h-[44px] opacity-75 flex items-center justify-center gap-2 
-          border border-red-400/20"
-          title={tooltipText}
-        >
-          Insufficient Balance
-        </button>
-      );
-    }
+//       return (
+//         <button
+//           disabled
+//           className="min-w-[140px] bg-red-500/90 backdrop-blur-sm text-white font-medium rounded-xl px-4 py-2 
+//           transition-all duration-200 h-[44px] opacity-75 flex items-center justify-center gap-2 
+//           border border-red-400/20"
+//           title={tooltipText}
+//         >
+//           Insufficient Balance
+//         </button>
+//       );
+//     }
 
     if (isTaskLoading || isPolicyLoading) {
       return (
