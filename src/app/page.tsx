@@ -661,7 +661,7 @@ export default function Home() {
               onClick={() => setShowComingSoonModal(true)}
               className="mt-4 px-8 py-2 text-xl"
             >
-              Create Agent
+          Create Agent
             </CustomButton>
 
             <CustomButton
@@ -763,7 +763,7 @@ export default function Home() {
                 {isTxProcessing ? "Processing..." : "Claim Test Funds"}
               </button>
 
-              <div className="relative">
+              <div className="relative ">
                 <button
                   className="bg-[#1a1a4a] text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl border border-yellow-500/20"
                   onClick={() => setShowTokenBalances(!showTokenBalances)}
@@ -771,7 +771,7 @@ export default function Home() {
                   ERC-20 Token Balances
                 </button>
                 {showTokenBalances && (
-                  <div className="absolute right-0 mt-2 w-64 bg-[#1a1a4a] border border-yellow-500/20 rounded-lg shadow-xl z-50">
+                  <div className="absolute right-0 mt-2 w-64 bg-[#1a1a4a] border border-yellow-500/20 rounded-lg shadow-xl z-[999]">
                     <div className="p-4 space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="text-yellow-200">USDC:</span>
@@ -808,7 +808,7 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full">
           {/* Agent Card */}
           <div
-            className="bg-white/5 backdrop-blur-sm border border-gray-700 rounded-lg p-4 md:p-6 cursor-pointer hover:border-yellow-500 transition-colors"
+            className="bg-white/5 backdrop-blur-sm border border-yellow-700 rounded-lg p-4 md:p-6 cursor-pointer hover:border-yellow-500 transition-colors"
             onClick={() => setShowModal(true)}
           >
             {isLoadingAgentData ? (
@@ -1104,7 +1104,7 @@ End Time: ${avsPolicyData?.whenCondition?.endTime || "0"}`}
                           className="w-full py-2"
                         >
                           Start Chat
-                        </CustomButton>
+                </CustomButton>
                       </div>
                     </div>
                   </div>
