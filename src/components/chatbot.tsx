@@ -136,11 +136,7 @@ export default function Chatbot({
       // Update message with transaction hash immediately
       const txMessage: Message = {
         role: "assistant",
-        content: `Transaction submitted successfully!\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
-          TRANSACTION_VALUE
-        )}\nExecution Fee: ${formatWeiToEth(
-          executionFees
-        )}\n\nCheck at ScrollScan: https://sepolia.scrollscan.com/tx/${
+        content: `Transaction submitted successfully!\n\nCheck at ScrollScan: https://sepolia.scrollscan.com/tx/${
           batchTxData.transactionHash
         }`,
         timestamp: new Date(),
