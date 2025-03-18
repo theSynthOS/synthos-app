@@ -35,7 +35,6 @@ export default function ChatbotCard({
           executionFees={executionFees}
           creatorAddress={creatorAddress}
         />
-        <Chatbot agentId={agentId} agentName={agentName} userAddress={userAddress} />
       </div>
     </div>
   );
