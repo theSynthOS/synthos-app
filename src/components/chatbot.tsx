@@ -344,14 +344,14 @@ export default function Chatbot({
       setIsTxSent(true);
 
       // Add processing message first
-      const processingMessage: Message = {
-        role: "assistant",
-        content: `Processing transaction...\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
-          TRANSACTION_VALUE
-        )}\nExecution Fee: ${formatWeiToEth(executionFees)}`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, processingMessage]);
+      // const processingMessage: Message = {
+      //   role: "assistant",
+      //   content: `Processing transaction...\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
+      //     TRANSACTION_VALUE
+      //   )}\nExecution Fee: ${formatWeiToEth(executionFees)}`,
+      //   timestamp: new Date(),
+      // };
+      // setMessages((prev) => [...prev, processingMessage]);
       //disable the button
       document
         .getElementById("send-message-input")
