@@ -6,10 +6,11 @@ const USERNAME = process.env.NEXT_PUBLIC_USERNAME || '';
 const PASSWORD = process.env.NEXT_PUBLIC_PASSWORD || '';
 
 // Determine if we're in development mode
-const isDevelopment = process.env.NODE_ENV === 'development';
+const isDevelopment = process.env.NODE_ENV === 'production';
 
 // Agent endpoint - use different values based on environment
-const AGENT_ENDPOINT = 'http://localhost:3001/ed9ddab6-6713-055c-bca6-3390aee6bf72/message';
+const AGENT_ENDPOINT = process.env.NEXT_PUBLIC_AI_AGENT || '';
+
 
 
 interface AiAgentRequest {

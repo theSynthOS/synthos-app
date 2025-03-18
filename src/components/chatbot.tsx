@@ -99,12 +99,13 @@ export default function Chatbot({
   };
 
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
-    "Hey, I have " +
-      walletBalance?.data?.displayValue.toString() +
-      " " +
-      walletBalance?.data?.symbol.toString() +
-      " and I would like to invest. What's the best recommendation for me?",
+    // "Hey, I have " +
+    //   walletBalance?.data?.displayValue.toString() +
+    //   " " +
+    //   walletBalance?.data?.symbol.toString() +
+    //   " and I would like to invest. What's the best recommendation for me?",
     "Based on my smart wallet balance, whats the best investment for me?",
+    "Hey, I have 10 USDC and I would like to invest. What's the best recommendation for me?",
   ]);
 
   // Add contract addresses at the top
