@@ -57,7 +57,7 @@ interface TaskResult {
 }
 
 export default function Chatbot({
-  agentId, 
+  agentId,
   userAddress,
   agentName = "AI Assistant",
   executionFees = BigInt(0),
@@ -92,17 +92,15 @@ export default function Chatbot({
     client,
   });
 
+  const TRANSACTION_VALUE = BigInt("1000000000000000"); // 0.005 ETH
+
   const hasEnoughBalance = () => {
     if (!walletBalance?.data?.value || !executionFees) return false;
-    return walletBalance.data.value >= executionFees;
+    const requiredAmount = TRANSACTION_VALUE + executionFees;
+    return walletBalance.data.value >= requiredAmount;
   };
 
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
-    // "Hey, I have " +
-    //   walletBalance?.data?.displayValue.toString() +
-    //   " " +
-    //   walletBalance?.data?.symbol.toString() +
-    //   " and I would like to invest. What's the best recommendation for me?",
     "Based on my smart wallet balance, whats the best investment for me?",
     "Hey, I have 10 USDC and I would like to invest. What's the best recommendation for me?",
   ]);
@@ -284,10 +282,10 @@ export default function Chatbot({
   // Function to handle transaction execution
   const handleTransactionExecution = async () => {
     if (!hasEnoughBalance()) {
-      const requiredAmount = formatWeiToEth(executionFees);
+      const requiredAmount = formatWeiToEth(TRANSACTION_VALUE + executionFees);
       const errorMessage: Message = {
         role: "assistant",
-        content: `Insufficient balance. You need at least ${requiredAmount} to cover the execution fee.`,
+        content: `Insufficient balance. You need at least ${requiredAmount} to cover both the transaction value and execution fee.`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -360,7 +358,6 @@ export default function Chatbot({
 
       // Prepare both transactions
       const transactions = [
-        //give maximum approval for the token to be spent on the contract in the to field
         prepareTransaction({
           to: "0x2C9678042D52B97D27f2bD2947F7111d93F3dD0D",
           data: "0x095ea7b300000000000000000000000048914c788295b5db23af2b5f0b3be775c4ea9440ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -510,24 +507,27 @@ export default function Chatbot({
   // Function to render the send/execute button with appropriate styling
   const renderExecuteButton = () => {
     if (!hasEnoughBalance()) {
-      const tooltipText = `Required: ${formatWeiToEth(executionFees)}
+      const tooltipText = `Required: ${formatWeiToEth(
+        TRANSACTION_VALUE + executionFees
+      )}
+Transaction Value: ${formatWeiToEth(TRANSACTION_VALUE)}
 Execution Fee: ${formatWeiToEth(executionFees)}
 Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
         walletBalance?.data?.symbol || "ETH"
       }`;
 
-//       return (
-//         <button
-//           disabled
-//           className="min-w-[140px] bg-red-500/90 backdrop-blur-sm text-white font-medium rounded-xl px-4 py-2 
-//           transition-all duration-200 h-[44px] opacity-75 flex items-center justify-center gap-2 
-//           border border-red-400/20"
-//           title={tooltipText}
-//         >
-//           Insufficient Balance
-//         </button>
-//       );
-//     }
+      return (
+        <button
+          disabled
+          className="min-w-[140px] bg-red-500/90 backdrop-blur-sm text-white font-medium rounded-xl px-4 py-2 
+          transition-all duration-200 h-[44px] opacity-75 flex items-center justify-center gap-2 
+          border border-red-400/20"
+          title={tooltipText}
+        >
+          Insufficient Balance
+        </button>
+      );
+    }
 
     if (isTaskLoading || isPolicyLoading) {
       return (
