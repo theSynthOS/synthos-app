@@ -79,6 +79,8 @@ export default function Chatbot({
   const [isPreparingTx, setIsPreparingTx] = useState(false);
   const [isTxSent, setIsTxSent] = useState(false);
   const [hasShownTxSuccess, setHasShownTxSuccess] = useState(false);
+  const [currentInvestmentAmount, setCurrentInvestmentAmount] =
+    useState<number>(10); // Default to 10 USDC
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const avsLogsEndRef = useRef<HTMLDivElement>(null);
@@ -90,12 +92,9 @@ export default function Chatbot({
     client,
   });
 
-  const TRANSACTION_VALUE = BigInt("1000000000000000"); // 0.005 ETH
-
   const hasEnoughBalance = () => {
     if (!walletBalance?.data?.value || !executionFees) return false;
-    const requiredAmount = TRANSACTION_VALUE + executionFees;
-    return walletBalance.data.value >= requiredAmount;
+    return walletBalance.data.value >= executionFees;
   };
 
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
@@ -130,6 +129,21 @@ export default function Chatbot({
   const { mutate: sendBatchTransaction, data: batchTxData } =
     useSendBatchTransaction();
 
+  // Extract amount from messages
+  const getAmountFromMessages = () => {
+    // Look through messages in reverse to find the latest amount mentioned
+    for (const msg of [...messages].reverse()) {
+      if (msg.role === "user") {
+        // Look for patterns like "invest X USDC" or "supply X USDC" or just "X USDC"
+        const match = msg.content.match(/(\d+(?:\.\d+)?)\s*(?:USDC|usdc)/i);
+        if (match) {
+          return parseFloat(match[1]);
+        }
+      }
+    }
+    return 10; // Default to 10 USDC if no amount found
+  };
+
   // Watch for transaction hash in batchTxData
   useEffect(() => {
     console.log("batchTxData", batchTxData);
@@ -137,7 +151,9 @@ export default function Chatbot({
       // Update message with transaction hash immediately
       const txMessage: Message = {
         role: "assistant",
-        content: `Transaction submitted successfully!\n\nCheck at ScrollScan: https://sepolia.scrollscan.com/tx/${
+        content: `Transaction submitted successfully!\n\nTransaction Details:\nInvestment Amount: ${currentInvestmentAmount} USDC\nExecution Fee: ${formatWeiToEth(
+          executionFees
+        )}\n\nCheck at ScrollScan: https://sepolia.scrollscan.com/tx/${
           batchTxData.transactionHash
         }`,
         timestamp: new Date(),
@@ -156,7 +172,7 @@ export default function Chatbot({
       // Mark that we've shown the success message
       setHasShownTxSuccess(true);
     }
-  }, [batchTxData, hasShownTxSuccess]);
+  }, [batchTxData, hasShownTxSuccess, currentInvestmentAmount, executionFees]);
 
   // Reset hasShownTxSuccess when starting a new transaction
   useEffect(() => {
@@ -267,16 +283,16 @@ export default function Chatbot({
 
   // Function to handle transaction execution
   const handleTransactionExecution = async () => {
-    // if (!hasEnoughBalance()) {
-    //   const requiredAmount = formatWeiToEth(TRANSACTION_VALUE + executionFees);
-    //   const errorMessage: Message = {
-    //     role: "assistant",
-    //     content: `Insufficient balance. You need at least ${requiredAmount} to cover both the transaction value and execution fee.`,
-    //     timestamp: new Date(),
-    //   };
-    //   setMessages((prev) => [...prev, errorMessage]);
-    //   return;
-    // }
+    if (!hasEnoughBalance()) {
+      const requiredAmount = formatWeiToEth(executionFees);
+      const errorMessage: Message = {
+        role: "assistant",
+        content: `Insufficient balance. You need at least ${requiredAmount} to cover the execution fee.`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      return;
+    }
 
     if (!creatorAddress) {
       const errorMessage: Message = {
@@ -310,9 +326,41 @@ export default function Chatbot({
       let calldata = taskDetails.callData as `0x${string}`;
 
       console.log("calldata original", calldata);
+      // Get amount from user messages and update state
+      const userAmount = getAmountFromMessages();
+      setCurrentInvestmentAmount(userAmount);
+      console.log("User investment amount:", userAmount);
+
+      // The calldata format for supply function is:
+      // Function signature (4 bytes) + params (each 32 bytes):
+      // [0]: 0x617ba037                                                           - function signature
+      // [1]: 000000000000000000000000{asset}                                     - asset address
+      // [2]: 0000000000000000000000000000000000000000000000000000000002160ec0   - amount
+      // [3]: 000000000000000000000000{onBehalfOf}                               - onBehalfOf address
+      // [4]: 0000000000000000000000000000000000000000000000000000000000000000   - referralCode (should be 0)
+
+      // Replace the onBehalfOf address and amount
+      const userAddress = account.address
+        .toLowerCase()
+        .replace("0x", "")
+        .padStart(40, "0");
+      const newAmount = BigInt(Math.floor(userAmount * 10 ** 6))
+        .toString(16)
+        .padStart(64, "0"); // Convert user amount to USDC decimals
+
+      // Reconstruct calldata with proper formatting
+      const newCalldata = (`0x617ba037` + // function signature
+        `000000000000000000000000${calldata.slice(34, 74)}` + // keep original asset address with padding
+        `${newAmount}` + // new amount
+        `000000000000000000000000${userAddress}` + // user address with padding
+        `${"0".padStart(64, "0")}`) as `0x${string}`; // referral code set to 0
+
+      console.log("Original calldata:", calldata);
+      console.log("New calldata:", newCalldata);
 
       // Prepare both transactions
       const transactions = [
+        //give maximum approval for the token to be spent on the contract in the to field
         prepareTransaction({
           to: "0x2C9678042D52B97D27f2bD2947F7111d93F3dD0D",
           data: "0x095ea7b300000000000000000000000048914c788295b5db23af2b5f0b3be775c4ea9440ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -321,8 +369,8 @@ export default function Chatbot({
           value: BigInt(0),
         }),
         prepareTransaction({
-          to: taskDetails.to,
-          data: calldata, // Fix: Remove quotes to use the actual newCalldata value
+          to: "0x48914C788295b5db23aF2b5F0B3BE775C4eA9440",
+          data: newCalldata,
           chain: scrollSepolia,
           client: client,
           value: BigInt(0),
@@ -341,14 +389,14 @@ export default function Chatbot({
       setIsTxSent(true);
 
       // Add processing message first
-      // const processingMessage: Message = {
-      //   role: "assistant",
-      //   content: `Processing transaction...\n\nTransaction Details:\nMain Transaction Value: ${formatWeiToEth(
-      //     TRANSACTION_VALUE
-      //   )}\nExecution Fee: ${formatWeiToEth(executionFees)}`,
-      //   timestamp: new Date(),
-      // };
-      // setMessages((prev) => [...prev, processingMessage]);
+      const processingMessage: Message = {
+        role: "assistant",
+        content: `Processing transaction...\n\nTransaction Details:\nInvestment Amount: ${userAmount} USDC\nExecution Fee: ${formatWeiToEth(
+          executionFees
+        )}`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, processingMessage]);
       //disable the button
       document
         .getElementById("send-message-input")
@@ -461,15 +509,12 @@ export default function Chatbot({
 
   // Function to render the send/execute button with appropriate styling
   const renderExecuteButton = () => {
-//     if (!hasEnoughBalance()) {
-//       const tooltipText = `Required: ${formatWeiToEth(
-//         TRANSACTION_VALUE + executionFees
-//       )}
-// Transaction Value: ${formatWeiToEth(TRANSACTION_VALUE)}
-// Execution Fee: ${formatWeiToEth(executionFees)}
-// Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
-//         walletBalance?.data?.symbol || "ETH"
-//       }`;
+    if (!hasEnoughBalance()) {
+      const tooltipText = `Required: ${formatWeiToEth(executionFees)}
+Execution Fee: ${formatWeiToEth(executionFees)}
+Your Balance: ${walletBalance?.data?.displayValue || "0"} ${
+        walletBalance?.data?.symbol || "ETH"
+      }`;
 
 //       return (
 //         <button
