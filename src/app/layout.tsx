@@ -3,7 +3,12 @@ import type { Metadata } from "next";
 import { ConnectButton, ThirdwebProvider } from "thirdweb/react";
 import "../styles/globals.css";
 import Header from "../components/header";
-import { Gluten, Titillium_Web, Roboto_Mono, Space_Grotesk } from "next/font/google";
+import {
+  Gluten,
+  Titillium_Web,
+  Roboto_Mono,
+  Space_Grotesk,
+} from "next/font/google";
 
 const roboto_mono = Roboto_Mono({
   subsets: ["latin"],
@@ -21,28 +26,26 @@ export const metadata: Metadata = {
   title: "SynthOS - Scroll's #1 Verifiable DeFAI Agent Marketplace",
   description: "Scroll's #1 Verifiable DeFAI Agent Marketplace",
   icons: {
-    icon: "/logo.jpeg",
+    icon: "https://avatars.githubusercontent.com/u/199569871?s=400&u=a078c4fa4af3ed32392e7ba6bbcf36ce8a6b4379&v=4",
   },
 };
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
       <body
-        className={`${space_grotesk.className}`}  // Use gluten font for the body
+        className={`${space_grotesk.className}`} // Use gluten font for the body
         style={{ backgroundColor: "#09092f", minWidth: "100vw" }}
       >
         <ThirdwebProvider>
           <Header />
-          <div className="w-full h-full mx-2 overflow-y-hidden">
-            {children}
-          </div>
+          <div className="w-full h-full mx-2 overflow-y-hidden">{children}</div>
         </ThirdwebProvider>
       </body>
     </html>
-  )
+  );
 }
