@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 
 // AVS logs API endpoint from environment variables
-const AVS_LOGS_URL = process.env.NEXT_PUBLIC_AVS_LOGS_URL || "https://43f6-2001-d08-f0-8b29-908b-5e15-5bdb-5cdb.ngrok-free.app/logs/";
+const AVS_LOGS_URL = process.env.NEXT_PUBLIC_AVS_LOGS_URL || "https://d296-2001-d08-f0-cbe1-e22e-b1a4-b267-d704.ngrok-free.app/logs/";
 const AVS_LOGS_API_KEY = process.env.NEXT_PUBLIC_AVS_LOGS_API_KEY || "synthos";
 
 console.log("AVS_LOGS_URL:", AVS_LOGS_URL);
