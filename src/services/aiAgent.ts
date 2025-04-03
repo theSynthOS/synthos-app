@@ -53,24 +53,18 @@ export async function sendMessageToAgent(
     let data;
     if (isDevelopment) {
       console.log("Sending message to agent in development mode");
-      // Call the agent (using the appropriate endpoint based on environment)
-      const response = await fetch(AGENT_ENDPOINT, {
+      const response = await fetch("/api/agent", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "Access-Control-Allow-Origin": "*",
         },
-        mode: "cors",
-        credentials: "include",
         body: JSON.stringify({
           user: userAddress,
           text: message,
           roomId: userAddress,
         }),
       });
-
-      console.log(response);
 
       if (!response.ok) {
         throw new Error(`Error: ${response.status} ${response.statusText}`);
@@ -79,23 +73,17 @@ export async function sendMessageToAgent(
       data = await response.json();
       console.log(data);
     } else {
-      // Call the agent (using the appropriate endpoint based on environment)
-      const response = await fetch(AGENT_ENDPOINT, {
+      const response = await fetch("/api/agent", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "Access-Control-Allow-Origin": "*",
         },
-        mode: "cors",
-        credentials: "include",
         body: JSON.stringify({
           text: message,
           agentId: agentId,
         }),
       });
-
-      console.log(response);
 
       if (!response.ok) {
         throw new Error(`Error: ${response.status} ${response.statusText}`);
