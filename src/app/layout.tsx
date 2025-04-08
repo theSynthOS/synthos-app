@@ -9,6 +9,7 @@ import {
   Roboto_Mono,
   Space_Grotesk,
 } from "next/font/google";
+import { MaintenanceBanner } from "@/components/maintainanceBanner";
 
 const roboto_mono = Roboto_Mono({
   subsets: ["latin"],
@@ -42,6 +43,7 @@ export default function RootLayout({
         style={{ backgroundColor: "#09092f", minWidth: "100vw" }}
       >
         <ThirdwebProvider>
+        <MaintenanceBanner />
           <Header />
           <div className="w-full h-full mx-2 overflow-y-hidden">{children}</div>
         </ThirdwebProvider>
