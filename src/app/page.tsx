@@ -77,7 +77,9 @@ const formatWeiToEth = (wei: bigint): string => {
 };
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"info" | "logs">("info");
+  const [activeTab, setActiveTab] = useState<"info" | "logs" | "chats">("info");
+  const [chats, setChats] = useState([]);
+  const [selectedChat, setSelectedChat] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showComingSoonModal, setShowComingSoonModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
@@ -146,6 +148,24 @@ export default function Home() {
       };
     }
   }, [showModal, activeTab]);
+
+  // Fetch chat history
+  useEffect(() => {
+    if (activeTab === "chats") {
+      async function fetchChats() {
+        const response = await fetch("/api/chats");
+        const data = await response.json();
+        setChats(data);
+      }
+      fetchChats();
+    }
+  }, [activeTab]);
+
+  const handleChatSelect = (chatId: string) => {
+    const selectedChat = chats.find((chat: any) => chat._id === chatId) || null;
+    setSelectedChat(selectedChat);
+    setShowModal(true);
+  };
 
   // Contract read agent details
   const contract = getContract({
@@ -891,7 +911,31 @@ export default function Home() {
                 >
                   AVS Logs
                 </button>
+                <button
+                  className={`px-4 py-2 font-medium ${
+                    activeTab === "chats"
+                      ? "text-yellow-200 border-b-2 border-yellow-200"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
+                  onClick={() => setActiveTab("chats")}
+                >
+                  Chat History
+                </button>
               </div>
+              {activeTab === "chats" && (
+          <div className="space-y-4">
+            {chats.map((chat: any) => (
+              <div
+                key={chat._id}
+                onClick={() => handleChatSelect(chat._id)}
+                className="cursor-pointer hover:bg-gray-200 p-4 rounded-md"
+              >
+                <p>{`Chat with Agent: ${chat.agentId}`}</p>
+                <p>{`Created at: ${new Date(chat.createdAt).toLocaleString()}`}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
               {/* Tab Content */}
               <div className="flex-1 overflow-auto">
